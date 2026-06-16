@@ -55,8 +55,8 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     ignoreHTTPSErrors: true,
-    trace: "retain-on-failure",
-    screenshot: "only-on-failure"
+    trace: "off",
+    screenshot: "off"
   },
   projects: projects.length ? projects : [allProjects[0]!]
 });

@@ -307,6 +307,52 @@
       word-break: break-all;
     }
 
+    .recent-runs-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .recent-runs-table th,
+    .recent-runs-table td {
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    .recent-runs-table th {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .recent-runs-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .recent-runs-table a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .recent-runs-table a:hover {
+      text-decoration: underline;
+    }
+
+    .recent-run-id {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .recent-runs-empty {
+      margin: 0;
+    }
+
     .actions {
       display: flex;
       flex-wrap: wrap;
@@ -422,11 +468,22 @@
     }
 
     .run-progress-track {
-      height: 10px;
+      height: 12px;
       border-radius: 999px;
       background: var(--bg-elevated);
       border: 1px solid var(--border);
       overflow: hidden;
+      position: relative;
+    }
+
+    .run-progress-track.is-indeterminate .run-progress-bar {
+      width: 42%;
+      animation: run-progress-slide 1.35s ease-in-out infinite;
+    }
+
+    @keyframes run-progress-slide {
+      0% { transform: translateX(-110%); }
+      100% { transform: translateX(320%); }
     }
 
     .run-progress-bar {
@@ -443,6 +500,18 @@
 
     .run-progress-bar.is-failed {
       background: var(--fail);
+    }
+
+    .active-run-progress {
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+
+    .active-run-progress .run-progress-percent {
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      color: var(--text);
     }
 
     .message {
@@ -751,6 +820,14 @@
         </form>
       </section>
 
+      <section id="recent-runs-panel" class="card">
+        <h2 class="card-title">Recent runs</h2>
+        <p class="card-desc">Last 5 migration comparisons. Reports stay available after a server restart.</p>
+        <div id="recent-runs-list">
+          <p class="hint recent-runs-empty">Loading…</p>
+        </div>
+      </section>
+
       <section id="run-panel" class="card hidden">
         <h2 class="card-title">Run progress</h2>
         <div class="meta">
@@ -896,6 +973,7 @@
     const summaryLinkWrap = document.getElementById("summary-link-wrap");
     const summaryLink = document.getElementById("summary-link");
     const runResults = document.getElementById("run-results");
+    const recentRunsList = document.getElementById("recent-runs-list");
     const sourceTabs = document.querySelectorAll(".source-tabs button");
     const sourceSinglePanel = document.getElementById("source-single");
     const sourceUploadPanel = document.getElementById("source-upload");
@@ -983,6 +1061,74 @@
     function resetRunProgressBar() {
       lastRunProgressPercent = 0;
       updateRunProgressBar("queued", 0, 0);
+    }
+
+    function formatRunTimestamp(iso) {
+      if (!iso) return "—";
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return "—";
+      return date.toLocaleString();
+    }
+
+    function formatRecentRunPages(run) {
+      if (run.pageCount == null) return "—";
+      if (run.pagesCompleted != null && run.status === "running") {
+        return `${run.pagesCompleted} / ${run.pageCount}`;
+      }
+      return String(run.pageCount);
+    }
+
+    function renderRecentRuns(runs) {
+      if (!runs.length) {
+        recentRunsList.innerHTML = '<p class="hint recent-runs-empty">No runs yet. Start a comparison above.</p>';
+        return;
+      }
+
+      const rows = runs
+        .map((run) => {
+          const statusClass = statusPillClass(run.status);
+          const reportCell =
+            run.status === "completed"
+              ? `<a href="${escapeHtml(run.summaryUrl)}" target="_blank" rel="noopener">Summary</a>`
+              : "—";
+
+          return `
+            <tr>
+              <td><span class="recent-run-id">${escapeHtml(run.id)}</span></td>
+              <td>${escapeHtml(formatRunTimestamp(run.startedAt))}</td>
+              <td>${escapeHtml(formatRecentRunPages(run))}</td>
+              <td><span class="status-pill ${statusClass}">${escapeHtml(run.status)}</span></td>
+              <td>${reportCell}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      recentRunsList.innerHTML = `
+        <table class="recent-runs-table">
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>Started</th>
+              <th>Pages</th>
+              <th>Status</th>
+              <th>Report</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    async function loadRecentRuns() {
+      try {
+        const response = await fetch("/api/runs?limit=5");
+        const runs = await response.json();
+        if (!response.ok) throw new Error(runs.error || "Could not load recent runs");
+        renderRecentRuns(runs);
+      } catch (error) {
+        recentRunsList.innerHTML = `<p class="hint recent-runs-empty">${escapeHtml(error.message)}</p>`;
+      }
     }
 
     function statusPillClass(status) {
@@ -1270,10 +1416,12 @@
         summaryLinkWrap.classList.remove("hidden");
         setRunningState(false);
         if (currentRunId) void loadRunResults(currentRunId);
+        void loadRecentRuns();
       } else if (status === "failed") {
         showMessage(runMessage, error || "Migration comparison failed.", "error");
         setRunningState(false);
         clearRunResults();
+        void loadRecentRuns();
       } else {
         hideMessage(runMessage);
         summaryLinkWrap.classList.add("hidden");
@@ -1298,6 +1446,7 @@
       clearRunResults();
       resetRunProgressBar();
       updateStatus("queued", null, 0);
+      void loadRecentRuns();
 
       eventSource = new EventSource(`/api/runs/${runId}/events`);
 
@@ -1454,6 +1603,7 @@
     setSource("single");
     void loadSettings();
     void loadModules();
+    void loadRecentRuns();
     void reconnectActiveRun();
   </script>
 </body>

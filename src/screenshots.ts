@@ -1,4 +1,5 @@
 import { Page } from "@playwright/test";
+import { config } from "./config";
 
 const SCROLLBAR_STYLE = `
   html {
@@ -30,26 +31,35 @@ async function scrollPageForLazyContent(page: Page): Promise<void> {
       document.documentElement.scrollHeight,
       document.body?.offsetHeight ?? 0
     );
-    const step = Math.max(window.innerHeight * 0.75, 500);
+    const step = Math.max(window.innerHeight, 700);
     let position = 0;
 
     while (position < height) {
       window.scrollTo(0, position);
-      await delay(120);
+      await delay(40);
       position += step;
     }
 
     window.scrollTo(0, 0);
-    await delay(250);
+    await delay(100);
   });
 }
 
-/** Full-page screenshot including scrollable content; scrollbars forced visible for comparison. */
-export async function captureFullPageScreenshot(page: Page, filePath: string, timeoutMs = 120000): Promise<void> {
+/** Capture page screenshot for visual comparison. */
+export async function captureFullPageScreenshot(page: Page, filePath: string, timeoutMs = 90000): Promise<void> {
+  if (config.fastVisual) {
+    await page.screenshot({
+      path: filePath,
+      fullPage: false,
+      timeout: Math.min(timeoutMs, 30000),
+      animations: "disabled"
+    });
+    return;
+  }
+
   await page.addStyleTag({ content: SCROLLBAR_STYLE }).catch(() => undefined);
   await scrollPageForLazyContent(page);
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.waitForTimeout(300);
 
   await page.screenshot({
     path: filePath,

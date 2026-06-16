@@ -9,7 +9,7 @@ import {
   saveAppSettings
 } from "./baseUrls";
 import { COMPARISON_MODULES, parseEnabledModulesInput, serializeEnabledModules } from "./comparisonModules";
-import { getJob, getActiveJob, isJobInProgress, listJobs, previewSpreadsheet, startRun } from "./runJob";
+import { getJob, getActiveJob, isJobInProgress, listRecentRuns, previewSpreadsheet, startRun } from "./runJob";
 import { isSpreadsheetFilename } from "./spreadsheetFile";
 import { parseHeadlessInput } from "./headless";
 import { writePagePdf } from "./reporters/pdfReporter";
@@ -270,18 +270,15 @@ app.get("/api/runs/active", (_req, res) => {
   });
 });
 
-app.get("/api/runs", (_req, res) => {
-  res.json(
-    listJobs().map((job) => ({
-      id: job.id,
-      status: job.status,
-      pageCount: job.pageCount,
-      startedAt: job.startedAt,
-      finishedAt: job.finishedAt,
-      error: job.error,
-      summaryUrl: `/reports/${job.id}/summary.html`
-    }))
-  );
+app.get("/api/runs", async (req, res) => {
+  const rawLimit = req.query.limit;
+  const limit =
+    rawLimit === "all"
+      ? 50
+      : Math.min(Math.max(Number(rawLimit) || 5, 1), 50);
+
+  const runs = await listRecentRuns(limit);
+  res.json(runs);
 });
 
 app.get("/api/runs/:id/results", async (req, res) => {

@@ -1,9 +1,10 @@
 import path from "path";
-import { Browser, chromium, Page, test } from "@playwright/test";
+import { Browser, Page, test } from "@playwright/test";
 import { ensureDevStorageState } from "../src/auth";
 import {
   ensureHttps,
   isAccessDeniedPage,
+  launchDevSiteBrowser,
   launchLiveSiteBrowser,
   newDevContext,
   newProdContext,
@@ -31,10 +32,9 @@ import { extractHeadings } from "../src/extractors/headingExtractor";
 import { extractImages } from "../src/extractors/imageExtractor";
 import { extractLanguage } from "../src/extractors/languageExtractor";
 import { extractLinks } from "../src/extractors/linkExtractor";
-import { extractMetadata } from "../src/extractors/metadataExtractor";
+import { extractMetadata, Metadata } from "../src/extractors/metadataExtractor";
 import { extractPageSpeed } from "../src/extractors/pageSpeedExtractor";
 import { extractTextStyles } from "../src/extractors/textStyleExtractor";
-import { isPlaywrightHeadless } from "../src/headless";
 import { readPageMappingsFromFile, resolveSpreadsheetPath } from "../src/readExcel";
 import { resolveReportPageDir } from "../src/urlMapper";
 import { writeSummaryCsv } from "../src/reporters/csvReporter";
@@ -70,9 +70,22 @@ const excelPath = resolveSpreadsheetPath(process.env.EXCEL_PATH);
 const pageMappings = readPageMappingsFromFile(excelPath, { maxPages: config.maxPages });
 const runResults: PageReport[] = [];
 let sharedLiveBrowser: Browser | null = null;
+let sharedDevBrowser: Browser | null = null;
 let devStorageState = "";
 const enabledModules = new Set(parseEnabledModulesInput(process.env.ENABLED_MODULES));
 const enabledModuleList = normalizeEnabledModuleIds([...enabledModules]);
+
+const emptyMetadata: Metadata = {
+  title: "",
+  description: "",
+  canonical: "",
+  robots: "",
+  keywords: "",
+  openGraph: {},
+  twitter: {},
+  hreflang: [],
+  allMeta: []
+};
 
 function moduleEnabled(moduleId: string): boolean {
   return isModuleEnabled(moduleId, enabledModules);
@@ -144,8 +157,7 @@ async function unlockDevPasswordGate(page: Page): Promise<void> {
     }
   }
 
-  await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => undefined);
-  await page.waitForTimeout(1000);
+  await page.waitForLoadState("domcontentloaded", { timeout: 10000 }).catch(() => undefined);
 }
 
 async function loadProdPage(page: Page, url: string, capture: CaptureState): Promise<void> {
@@ -210,26 +222,44 @@ async function loadAndExtract(page: Page, url: string, source: Source): Promise<
       }
     }
 
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(300);
     await closeCookieBanners(page);
   }
 
-  await page.waitForLoadState("load", { timeout: 30000 }).catch(() => undefined);
+  if (moduleEnabled("pageSpeed")) {
+    await page.waitForLoadState("load", { timeout: 15000 }).catch(() => undefined);
+  }
 
-  const pageSpeed = await extractPageSpeed(page, Date.now() - loadStartedAt);
+  const pageSpeed = moduleEnabled("pageSpeed")
+    ? await extractPageSpeed(page, Date.now() - loadStartedAt)
+    : {
+        wallClockMs: Date.now() - loadStartedAt,
+        domContentLoadedMs: 0,
+        loadCompleteMs: 0,
+        ttfbMs: 0,
+        transferSizeBytes: 0
+      };
+
+  const needHeadings = moduleEnabled("headings") || moduleEnabled("hTagHierarchy");
+  const [metadata, headings, textStyles, content, images, links, language] = await Promise.all([
+    moduleEnabled("metadata") ? extractMetadata(page) : Promise.resolve(emptyMetadata),
+    needHeadings ? extractHeadings(page) : Promise.resolve([]),
+    moduleEnabled("textStyle") ? extractTextStyles(page) : Promise.resolve([]),
+    moduleEnabled("content") ? extractContent(page) : Promise.resolve({ text: "", length: 0 }),
+    moduleEnabled("images") ? extractImages(page) : Promise.resolve([]),
+    moduleEnabled("brokenLinks") ? extractLinks(page) : Promise.resolve([]),
+    moduleEnabled("language") ? extractLanguage(page) : Promise.resolve({ htmlLang: "", hreflang: [], placeholders: [] })
+  ]);
 
   return {
-    metadata: await extractMetadata(page),
-    headings:
-      moduleEnabled("headings") || moduleEnabled("hTagHierarchy")
-        ? await extractHeadings(page)
-        : [],
-    textStyles: moduleEnabled("textStyle") ? await extractTextStyles(page) : [],
+    metadata,
+    headings,
+    textStyles,
     pageSpeed,
-    content: moduleEnabled("content") ? await extractContent(page) : { text: "", length: 0 },
-    images: moduleEnabled("images") ? await extractImages(page) : [],
-    links: moduleEnabled("brokenLinks") ? await extractLinks(page) : [],
-    language: moduleEnabled("language") ? await extractLanguage(page) : { htmlLang: "", hreflang: [], placeholders: [] },
+    content,
+    images,
+    links,
+    language,
     capture
   };
 }
@@ -267,14 +297,24 @@ test.beforeAll(async () => {
 
   await ensureDir(config.reportsDir);
   logger.info(`Loaded ${pageMappings.length} page(s) for comparison`);
-  logger.info("Ensuring migration site authentication...");
-  devStorageState = await ensureDevStorageState();
-  logger.info("Launching browser for live site...");
+  if (process.env.AUTH_ALREADY_DONE === "true") {
+    devStorageState = config.authStoragePath;
+    logger.info("Using migration auth from run setup");
+  } else {
+    logger.info("Ensuring migration site authentication...");
+    devStorageState = await ensureDevStorageState();
+  }
+  logger.info("Launching browsers...");
   sharedLiveBrowser = await launchLiveSiteBrowser();
-  logger.info("Live site browser ready");
+  sharedDevBrowser = await launchDevSiteBrowser();
+  logger.info("Browsers ready");
 });
 
 test.afterAll(async () => {
+  if (sharedDevBrowser) {
+    await sharedDevBrowser.close();
+    sharedDevBrowser = null;
+  }
   if (sharedLiveBrowser) {
     await sharedLiveBrowser.close();
     sharedLiveBrowser = null;
@@ -293,9 +333,13 @@ for (const [index, mapping] of pageMappings.entries()) {
   const testLabel = `${String(index + 1).padStart(3, "0")} ${mapping.pageName} [${mapping.path}] migration comparison`;
 
   test(testLabel, async ({}, testInfo) => {
-    if (!sharedLiveBrowser) {
-      throw new Error("Live site browser is not ready.");
+    if (!sharedLiveBrowser || !sharedDevBrowser) {
+      throw new Error("Browsers are not ready.");
     }
+
+    const pageNum = index + 1;
+    const pageTotal = pageMappings.length;
+    console.log(`[migration-progress] started ${pageNum}/${pageTotal}`);
 
     const browserName = testInfo.project.name;
     const viewport = testInfo.project.use.viewport ?? { width: 1440, height: 1200 };
@@ -308,21 +352,8 @@ for (const [index, mapping] of pageMappings.entries()) {
     const devScreenshot = path.join(pageDir, "dev.png");
     const diffScreenshot = path.join(pageDir, "diff.png");
 
-    const devBrowser = await chromium.launch({
-      headless: isPlaywrightHeadless(),
-      channel: "chrome",
-      ignoreDefaultArgs: ["--enable-automation"],
-      args: ["--disable-blink-features=AutomationControlled"]
-    }).catch(() =>
-      chromium.launch({
-        headless: isPlaywrightHeadless(),
-        ignoreDefaultArgs: ["--enable-automation"],
-        args: ["--disable-blink-features=AutomationControlled"]
-      })
-    );
-
     const prodContext = await newProdContext(sharedLiveBrowser, { viewport, isMobile, hasTouch });
-    const devContext = await newDevContext(devBrowser, devStorageState, viewport, { isMobile, hasTouch });
+    const devContext = await newDevContext(sharedDevBrowser, devStorageState, viewport, { isMobile, hasTouch });
     const prodPage = await prodContext.newPage();
     const devPage = await devContext.newPage();
 
@@ -368,8 +399,10 @@ for (const [index, mapping] of pageMappings.entries()) {
 
       let visual: CategoryResult = skippedCategoryResult("Visual comparison");
       if (moduleEnabled("visual")) {
-        await captureFullPageScreenshot(prodPage, prodScreenshot);
-        await captureFullPageScreenshot(devPage, devScreenshot);
+        await Promise.all([
+          captureFullPageScreenshot(prodPage, prodScreenshot),
+          captureFullPageScreenshot(devPage, devScreenshot)
+        ]);
         visual = await compareScreenshots(prodScreenshot, devScreenshot, diffScreenshot);
       }
 
@@ -417,20 +450,21 @@ for (const [index, mapping] of pageMappings.entries()) {
         enabledModules: enabledModuleList
       };
 
-      await writePageHtml(report);
-      await writePageJson(report);
-      try {
-        await writePagePdf(report.reportPaths.html, report.reportPaths.pdf!);
-      } catch (error) {
-        logger.warn(`PDF generation skipped: ${error instanceof Error ? error.message : String(error)}`);
+      await Promise.all([writePageHtml(report), writePageJson(report)]);
+      if (config.generatePdf) {
+        try {
+          await writePagePdf(report.reportPaths.html, report.reportPaths.pdf!);
+        } catch (error) {
+          logger.warn(`PDF generation skipped: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
       runResults.push(report);
+      console.log(`[migration-progress] completed ${pageNum}/${pageTotal}`);
     } finally {
       await prodPage.close().catch(() => undefined);
       await devPage.close().catch(() => undefined);
       await prodContext.close().catch(() => undefined);
       await devContext.close().catch(() => undefined);
-      await devBrowser.close().catch(() => undefined);
     }
   });
 }

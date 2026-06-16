@@ -82,7 +82,7 @@ export async function checkBrokenLinks(
 
   const issueGroups = await Promise.all(
     checkTasks.map(async ({ href }) => {
-      const response = await request.get(href, { timeout: 5000, maxRedirects: 5 }).catch(() => null);
+      const response = await request.get(href, { timeout: 3500, maxRedirects: 3 }).catch(() => null);
       if (!response) {
         return [
           {

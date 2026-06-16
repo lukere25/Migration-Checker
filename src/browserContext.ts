@@ -34,6 +34,24 @@ export async function launchLiveSiteBrowser(): Promise<Browser> {
   }
 }
 
+/** Reuse the same Chrome/Chromium launch path for migration site pages. */
+export async function launchDevSiteBrowser(): Promise<Browser> {
+  return launchLiveSiteBrowser();
+}
+
+const blockedResourcePattern =
+  /google-analytics\.com|googletagmanager\.com|doubleclick\.net|facebook\.net|hotjar\.com|clarity\.ms|segment\.io|fullstory\.com|optimizely\.com/i;
+
+export async function configureFastContext(context: BrowserContext): Promise<void> {
+  await context.route("**/*", (route) => {
+    const type = route.request().resourceType();
+    if (type === "media" || blockedResourcePattern.test(route.request().url())) {
+      return route.abort();
+    }
+    return route.continue();
+  });
+}
+
 export async function newProdContext(
   browser: Browser,
   options: { viewport: { width: number; height: number }; isMobile?: boolean; hasTouch?: boolean }
@@ -41,7 +59,7 @@ export async function newProdContext(
   const isMobile = options.isMobile ?? options.viewport.width < 900;
   const hasTouch = options.hasTouch ?? isMobile;
 
-  return browser.newContext({
+  const context = await browser.newContext({
     ignoreHTTPSErrors: true,
     locale: "en-US",
     timezoneId: "America/Los_Angeles",
@@ -50,6 +68,8 @@ export async function newProdContext(
     isMobile,
     hasTouch
   });
+  await configureFastContext(context);
+  return context;
 }
 
 export async function newDevContext(
@@ -61,7 +81,7 @@ export async function newDevContext(
   const isMobile = options?.isMobile ?? viewport.width < 900;
   const hasTouch = options?.hasTouch ?? isMobile;
 
-  return browser.newContext({
+  const context = await browser.newContext({
     storageState,
     ignoreHTTPSErrors: true,
     locale: "en-US",
@@ -69,6 +89,8 @@ export async function newDevContext(
     isMobile,
     hasTouch
   });
+  await configureFastContext(context);
+  return context;
 }
 
 export async function isAccessDeniedPage(page: Page): Promise<boolean> {
@@ -83,14 +105,8 @@ export async function isAccessDeniedPage(page: Page): Promise<boolean> {
 
 export async function waitForProdPageContent(page: Page): Promise<void> {
   await page
-    .locator('header, nav, main, [role="main"], [class*="hero" i], n-hero')
+    .locator('header, nav, main, [role="main"], article, body')
     .first()
-    .waitFor({ state: "visible", timeout: 20000 })
-    .catch(() => undefined);
-
-  await page
-    .locator("text=/UNLEASH|NetApp|What are you looking for/i")
-    .first()
-    .waitFor({ state: "visible", timeout: 10000 })
+    .waitFor({ state: "visible", timeout: 8000 })
     .catch(() => undefined);
 }

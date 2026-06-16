@@ -91,6 +91,15 @@ function appendLog(job: RunJob, line: string): void {
 }
 
 function trackRunProgressFromLog(job: RunJob, line: string): void {
+  const progressMatch = line.match(/\[migration-progress\]\s+completed\s+(\d+)\/(\d+)/i);
+  if (progressMatch) {
+    const completed = Number(progressMatch[1]);
+    const total = Number(progressMatch[2]);
+    if (total > 0) job.pageCount = total;
+    job.pagesCompleted = completed;
+    return;
+  }
+
   if (!/migration-comparison\.spec\.ts/.test(line)) return;
   if (!/^\s*[✓×]/.test(line)) return;
 
@@ -110,6 +119,85 @@ export function getJob(runId: string): RunJob | undefined {
 
 export function listJobs(): RunJob[] {
   return [...jobs.values()].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+}
+
+export interface RunListItem {
+  id: string;
+  status: RunStatus | "completed" | "failed";
+  pageCount?: number;
+  pagesCompleted?: number;
+  startedAt: string;
+  finishedAt?: string;
+  error?: string;
+  summaryUrl: string;
+}
+
+function runIdToIsoTimestamp(runId: string): string {
+  const match = runId.match(/^run-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/);
+  if (!match) return new Date(0).toISOString();
+  const [, date, hours, minutes, seconds, millis] = match;
+  return `${date}T${hours}:${minutes}:${seconds}.${millis}Z`;
+}
+
+export async function listRecentRuns(limit = 5): Promise<RunListItem[]> {
+  const byId = new Map<string, RunListItem>();
+
+  for (const job of listJobs()) {
+    byId.set(job.id, {
+      id: job.id,
+      status: job.status,
+      pageCount: job.pageCount,
+      pagesCompleted: job.pagesCompleted,
+      startedAt: job.startedAt,
+      finishedAt: job.finishedAt,
+      error: job.error,
+      summaryUrl: `/reports/${job.id}/summary.html`
+    });
+  }
+
+  const reportsRoot = path.join(process.cwd(), "reports");
+  if (await fs.pathExists(reportsRoot)) {
+    const entries = await fs.readdir(reportsRoot);
+    for (const entry of entries) {
+      if (!entry.startsWith("run-")) continue;
+
+      const runDir = path.join(reportsRoot, entry);
+      const stat = await fs.stat(runDir).catch(() => null);
+      if (!stat?.isDirectory() || byId.has(entry)) continue;
+
+      const summaryPath = path.join(runDir, "summary.json");
+      let startedAt = runIdToIsoTimestamp(entry);
+      let finishedAt: string | undefined;
+      let pageCount: number | undefined;
+      let status: RunListItem["status"] = "completed";
+
+      if (await fs.pathExists(summaryPath)) {
+        try {
+          const summary = await fs.readJson(summaryPath);
+          pageCount = summary.totals?.totalBrowserRuns ?? summary.totals?.totalPages;
+          finishedAt = summary.generatedAt;
+          startedAt = summary.generatedAt ?? startedAt;
+        } catch {
+          status = "failed";
+        }
+      } else {
+        status = "failed";
+      }
+
+      byId.set(entry, {
+        id: entry,
+        status,
+        pageCount,
+        startedAt,
+        finishedAt,
+        summaryUrl: `/reports/${entry}/summary.html`
+      });
+    }
+  }
+
+  return [...byId.values()]
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+    .slice(0, limit);
 }
 
 export async function startRun(options: {
@@ -243,7 +331,7 @@ async function executeJob(
     await ensurePlaywrightBrowsers(job);
     job.status = "running";
     job.pagesCompleted = 0;
-    appendLog(job, "Launching browsers and comparing pages (this can take 30–90 seconds per page)...");
+    appendLog(job, "Launching browsers and comparing pages...");
 
     const exitCode = await runPlaywright(job);
     job.exitCode = exitCode;
@@ -317,12 +405,52 @@ function runCommand(job: RunJob, args: string[]): Promise<number> {
   });
 }
 
+async function playwrightBrowsersReady(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = spawn(
+      "npx",
+      ["playwright", "test", "--list", "tests/migration-comparison.spec.ts"],
+      {
+        cwd: process.cwd(),
+        env: { ...process.env, NO_COLOR: "1" },
+        shell: process.platform === "win32"
+      }
+    );
+
+    let settled = false;
+    const finish = (ready: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(ready);
+    };
+
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(false);
+    }, 20000);
+
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      finish(code === 0);
+    });
+    child.on("error", () => {
+      clearTimeout(timer);
+      finish(false);
+    });
+  });
+}
+
 async function ensurePlaywrightBrowsers(job: RunJob): Promise<void> {
+  if (await playwrightBrowsersReady()) {
+    appendLog(job, "Playwright browsers ready");
+    return;
+  }
+
   const installArgs =
     process.env.PLAYWRIGHT_ALL_BROWSERS === "true"
       ? ["playwright", "install", "chromium", "webkit", "chrome"]
       : ["playwright", "install", "chromium", "chrome"];
-  appendLog(job, `Checking Playwright browsers (${installArgs.slice(2).join(", ")})...`);
+  appendLog(job, `Installing Playwright browsers (${installArgs.slice(2).join(", ")})...`);
   const exitCode = await runCommand(job, installArgs);
   if (exitCode !== 0) {
     throw new Error(
@@ -354,6 +482,9 @@ function buildRunEnv(job: RunJob): NodeJS.ProcessEnv {
   env.DEV_BASE_URL = config.devBaseUrl;
   env.DEV_PASSWORD = config.devPassword;
   env.ENABLED_MODULES = serializeEnabledModules(job.enabledModules);
+  env.AUTH_ALREADY_DONE = "true";
+  env.GENERATE_PDF = config.generatePdf ? "true" : "false";
+  env.FAST_VISUAL = config.fastVisual ? "true" : "false";
 
   return env;
 }
