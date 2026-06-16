@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NetApp Migration Checker</title>
+  <title>Sync Scope</title>
+  <link rel="icon" href="/sync-scope-logo.png" type="image/png">
   <style>
     :root {
       color-scheme: dark;
@@ -61,33 +62,23 @@
     .brand {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 16px;
     }
 
-    .brand-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, var(--accent), #6366f1);
-      display: grid;
-      place-items: center;
-      font-weight: 800;
-      font-size: 14px;
-      color: #fff;
-      box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
-    }
-
-    .brand h1 {
-      margin: 0;
-      font-size: 1.25rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
+    .brand-logo {
+      max-height: 50px;
+      height: auto;
+      width: auto;
+      display: block;
+      object-fit: contain;
+      flex-shrink: 0;
     }
 
     .brand p {
-      margin: 2px 0 0;
+      margin: 0;
       font-size: 13px;
       color: var(--muted);
+      max-width: 42rem;
     }
 
     .badge {
@@ -566,6 +557,10 @@
       font-size: 14px;
     }
 
+    .button-link:hover {
+      filter: brightness(1.05);
+    }
+
     .results-heading {
       margin: 20px 0 8px;
       font-size: 1rem;
@@ -753,10 +748,9 @@
   <header class="app-header">
     <div class="app-header-inner">
       <div class="brand">
-        <div class="brand-icon">MC</div>
+        <img src="/sync-scope-logo.png" alt="Sync Scope" class="brand-logo">
         <div>
-          <h1>Migration Checker</h1>
-          <p>Compare live NetApp pages against migration builds</p>
+          <p>Two pages. One layout. Same data — perfectly mirrored for instant comparison.</p>
         </div>
       </div>
       <span class="badge">Desktop Chrome</span>
@@ -816,7 +810,8 @@
 
           <div class="actions">
             <button type="button" class="secondary" id="preview-btn">Preview</button>
-            <button type="submit" class="primary" id="run-btn">Run migration check</button>
+            <button type="submit" class="primary" id="run-btn">Run Comparison</button>
+            <a id="form-summary-link" class="button-link hidden" href="#" target="_blank" rel="noopener">Open summary report</a>
           </div>
 
           <div id="active-run-progress" class="active-run-progress hidden" aria-live="polite">
@@ -1013,6 +1008,7 @@
     const logBox = document.getElementById("log-box");
     const summaryLinkWrap = document.getElementById("summary-link-wrap");
     const summaryLink = document.getElementById("summary-link");
+    const formSummaryLink = document.getElementById("form-summary-link");
     const runResults = document.getElementById("run-results");
     const recentRunsList = document.getElementById("recent-runs-list");
     const sourceTabs = document.querySelectorAll(".source-tabs button");
@@ -1033,7 +1029,7 @@
     const MODULES_STORAGE_KEY = "migration-checker-enabled-modules";
     const DEFAULT_MODULES = [
       { id: "metadata", label: "Metadata", description: "Meta tags and SEO fields" },
-      { id: "visual", label: "Visual comparison", description: "Screenshots and pixel diff" },
+      { id: "language", label: "Language", description: "HTML lang attribute" },
       { id: "brokenLinks", label: "Broken links", description: "HTTP status on internal links" },
       { id: "headings", label: "Headings", description: "Heading structure and text" },
       { id: "hTagHierarchy", label: "H tag hierarchy", description: "Heading order and level skips" },
@@ -1041,7 +1037,7 @@
       { id: "pageSpeed", label: "Page speed match", description: "Load timing vs live site" },
       { id: "content", label: "Content", description: "Body text similarity" },
       { id: "images", label: "Images", description: "Image sources and alt text" },
-      { id: "language", label: "Language", description: "HTML lang attribute" }
+      { id: "visual", label: "Visual comparison", description: "Screenshots and pixel diff" }
     ];
 
     let eventSource = null;
@@ -1049,6 +1045,12 @@
     let currentRunStatus = "queued";
     let currentRunId = null;
     let lastRunProgressPercent = 0;
+    const runProgressState = {
+      status: "queued",
+      pageCount: 0,
+      pagesCompleted: 0,
+      activePage: 0
+    };
 
     const runPhaseLabels = {
       queued: "Queued",
@@ -1057,9 +1059,14 @@
       running: "Comparing pages"
     };
 
-    function formatRunProgressLabel(status, pagesCompleted, pageCount) {
+    function formatRunProgressLabel() {
+      const { status, pagesCompleted, pageCount, activePage } = runProgressState;
       if (status === "completed") return "Complete";
       if (status === "failed") return "Run failed";
+
+      if (status === "running" && activePage > 0 && pageCount > 0) {
+        return `Comparing page ${activePage} of ${pageCount}`;
+      }
 
       const done = pagesCompleted ?? 0;
       if (status === "running" && pageCount > 0) {
@@ -1069,7 +1076,8 @@
       return runPhaseLabels[status] || "In progress";
     }
 
-    function computeRunProgressPercent(status, pagesCompleted, pageCount) {
+    function computeRunProgressPercent() {
+      const { status, pagesCompleted, pageCount, activePage } = runProgressState;
       if (status === "completed") return 100;
       if (status === "failed") return lastRunProgressPercent;
 
@@ -1081,17 +1089,20 @@
       };
 
       if (status === "running" && pageCount > 0) {
-        const ratio = Math.min((pagesCompleted ?? 0) / pageCount, 1);
+        const done =
+          activePage > pagesCompleted ? Math.max(activePage - 1, pagesCompleted) : pagesCompleted;
+        const ratio = Math.min(done / pageCount, 1);
         return Math.round(30 + ratio * 65);
       }
 
       return phaseBase[status] ?? 6;
     }
 
-    function updateRunProgressBar(status, pagesCompleted, pageCount) {
-      const percent = computeRunProgressPercent(status, pagesCompleted, pageCount);
+    function renderRunProgress() {
+      const { status, pageCount, pagesCompleted } = runProgressState;
+      const percent = computeRunProgressPercent();
       lastRunProgressPercent = percent;
-      const label = formatRunProgressLabel(status, pagesCompleted, pageCount);
+      const label = formatRunProgressLabel();
       const indeterminate =
         status !== "completed" &&
         status !== "failed" &&
@@ -1107,41 +1118,80 @@
         target.track.setAttribute("aria-label", `Run progress ${percent}%`);
         if (target.percent) target.percent.textContent = `${percent}%`;
       }
+
+      if (pageCount > 0) runPagesEl.textContent = String(pageCount);
+      else if (status === "running" && pagesCompleted > 0) runPagesEl.textContent = String(pagesCompleted);
+    }
+
+    function syncRunProgress(patch) {
+      if (patch.status) {
+        runProgressState.status = patch.status;
+        currentRunStatus = patch.status;
+      }
+
+      if (patch.pageCount != null && patch.pageCount > 0) {
+        runProgressState.pageCount = patch.pageCount;
+      }
+
+      if (patch.pagesCompleted != null) {
+        runProgressState.pagesCompleted = Math.max(runProgressState.pagesCompleted, patch.pagesCompleted);
+      }
+
+      if (patch.activePage != null) {
+        runProgressState.activePage = Math.max(runProgressState.activePage, patch.activePage);
+      }
+
+      if (patch.status === "completed" && runProgressState.pageCount > 0) {
+        runProgressState.pagesCompleted = runProgressState.pageCount;
+        runProgressState.activePage = runProgressState.pageCount;
+      }
+
+      if (patch.status === "queued" || patch.status === "downloading" || patch.status === "authenticating") {
+        runProgressState.pagesCompleted = patch.pagesCompleted ?? 0;
+        runProgressState.activePage = patch.activePage ?? 0;
+      }
+
+      renderRunProgress();
+    }
+
+    function resetRunProgressState() {
+      runProgressState.status = "queued";
+      runProgressState.pageCount = 0;
+      runProgressState.pagesCompleted = 0;
+      runProgressState.activePage = 0;
+      lastRunProgressPercent = 0;
+      renderRunProgress();
     }
 
     function applyProgressFromLogLine(line) {
-      const text = String(line);
+      const text = String(line).replace(/^\[stderr\]\s*/, "");
 
       const startedMatch = text.match(/\[migration-progress\]\s+started\s+(\d+)\/(\d+)/i);
       if (startedMatch) {
         const pageNum = Number(startedMatch[1]);
         const pageTotal = Number(startedMatch[2]);
-        if (pageTotal > 0) runPagesEl.textContent = String(pageTotal);
-        const status = currentRunStatus === "queued" ? "running" : currentRunStatus;
-        for (const target of runProgressTargets) {
-          target.label.textContent = `Comparing page ${pageNum} of ${pageTotal}`;
-        }
-        updateRunProgressBar(status, Math.max(pageNum - 1, 0), pageTotal);
+        syncRunProgress({
+          status: currentRunStatus === "queued" ? "running" : currentRunStatus,
+          pageCount: pageTotal,
+          activePage: pageNum,
+          pagesCompleted: Math.max(pageNum - 1, 0)
+        });
         return;
       }
 
       const match = text.match(/\[migration-progress\]\s+completed\s+(\d+)\/(\d+)/i);
       if (!match) return;
 
-      const pagesCompleted = Number(match[1]);
-      const pageCount = Number(match[2]);
-      if (pageCount > 0) runPagesEl.textContent = String(pageCount);
-      const status = currentRunStatus === "queued" ? "running" : currentRunStatus;
-      updateRunProgressBar(status, pagesCompleted, pageCount);
+      syncRunProgress({
+        status: currentRunStatus === "queued" ? "running" : currentRunStatus,
+        pageCount: Number(match[2]),
+        pagesCompleted: Number(match[1]),
+        activePage: Number(match[1])
+      });
     }
 
     function showActiveRunProgress(visible) {
       activeRunProgressWrap.classList.toggle("hidden", !visible);
-    }
-
-    function resetRunProgressBar() {
-      lastRunProgressPercent = 0;
-      updateRunProgressBar("queued", 0, 0);
     }
 
     function formatRunTimestamp(iso) {
@@ -1480,34 +1530,50 @@
       return requestData;
     }
 
+    function setSummaryReportLink(summaryUrl, visible) {
+      if (visible && summaryUrl) {
+        summaryLink.href = summaryUrl;
+        formSummaryLink.href = summaryUrl;
+        summaryLinkWrap.classList.remove("hidden");
+        formSummaryLink.classList.remove("hidden");
+      } else {
+        summaryLinkWrap.classList.add("hidden");
+        formSummaryLink.classList.add("hidden");
+      }
+    }
+
     function setRunningState(isRunning) {
       previewBtn.disabled = isRunning;
       runBtn.disabled = isRunning;
       if (isRunning) showActiveRunProgress(true);
     }
 
-    function updateStatus(status, pageCount, pagesCompleted, error, summaryUrl) {
+    function updateStatus(status, pageCount, pagesCompleted, error, summaryUrl, activePage) {
       currentRunStatus = status;
       runStatusEl.textContent = status;
       runStatusEl.className = `status-pill ${status}`;
-      if (pageCount != null) runPagesEl.textContent = String(pageCount);
-      updateRunProgressBar(status, pagesCompleted ?? 0, pageCount ?? 0);
+      syncRunProgress({
+        status,
+        pageCount: pageCount ?? 0,
+        pagesCompleted: pagesCompleted ?? 0,
+        activePage: activePage ?? 0
+      });
 
       if (status === "completed") {
         showMessage(runMessage, "Migration comparison finished. Open the summary or download PDF reports below.", "success");
-        summaryLink.href = summaryUrl;
-        summaryLinkWrap.classList.remove("hidden");
+        setSummaryReportLink(summaryUrl, true);
         setRunningState(false);
         if (currentRunId) void loadRunResults(currentRunId);
         void loadRecentRuns();
       } else if (status === "failed") {
         showMessage(runMessage, error || "Migration comparison failed.", "error");
         setRunningState(false);
+        setSummaryReportLink(null, false);
         clearRunResults();
         void loadRecentRuns();
       } else {
         hideMessage(runMessage);
-        summaryLinkWrap.classList.add("hidden");
+        if (status !== "completed") setSummaryReportLink(null, false);
         clearRunResults();
       }
     }
@@ -1527,10 +1593,10 @@
       runIdEl.textContent = runId;
       logBox.textContent = "";
       hideMessage(runMessage);
-      summaryLinkWrap.classList.add("hidden");
+      setSummaryReportLink(null, false);
       clearRunResults();
-      resetRunProgressBar();
-      updateStatus("queued", null, 0);
+      resetRunProgressState();
+      updateStatus("queued", 0, 0, null, null, 0);
       void loadRecentRuns();
       activeRunProgressWrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
@@ -1543,7 +1609,14 @@
 
       eventSource.addEventListener("status", (event) => {
         const data = JSON.parse(event.data);
-        updateStatus(data.status, data.pageCount, data.pagesCompleted, data.error, data.summaryUrl);
+        updateStatus(
+          data.status,
+          data.pageCount,
+          data.pagesCompleted,
+          data.error,
+          data.summaryUrl,
+          data.activePage
+        );
         if (data.status === "completed" || data.status === "failed") {
           eventSource.close();
           eventSource = null;
@@ -1634,8 +1707,9 @@
       hideMessage(formMessage);
       clearPreviewResults();
       setRunningState(true);
-      resetRunProgressBar();
-      updateRunProgressBar("queued", 0, 0);
+      setSummaryReportLink(null, false);
+      resetRunProgressState();
+      updateStatus("queued", 0, 0, null, null, 0);
 
       try {
         const response = await fetch("/api/runs", {
@@ -1679,7 +1753,7 @@
         currentRunId = lastRunId;
         runPanel.classList.remove("hidden");
         runIdEl.textContent = lastRunId;
-        updateStatus(job.status, job.pageCount, job.pagesCompleted, job.error, job.summaryUrl);
+        updateStatus(job.status, job.pageCount, job.pagesCompleted, job.error, job.summaryUrl, job.activePage);
         if (job.status === "completed") {
           await loadRunResults(lastRunId);
         }

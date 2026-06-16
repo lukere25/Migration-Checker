@@ -1,4 +1,5 @@
 import path from "path";
+import fs from "fs-extra";
 import { Browser, Page, test } from "@playwright/test";
 import { ensureDevStorageState } from "../src/auth";
 import {
@@ -86,6 +87,25 @@ const emptyMetadata: Metadata = {
   hreflang: [],
   allMeta: []
 };
+
+function emitRunProgress(phase: "started" | "completed", pageNum: number, pageTotal: number): void {
+  const line = `[migration-progress] ${phase} ${pageNum}/${pageTotal}`;
+  process.stdout.write(`${line}\n`);
+
+  const progressFile = process.env.RUN_PROGRESS_FILE;
+  if (!progressFile) return;
+
+  fs.writeJsonSync(
+    progressFile,
+    {
+      phase,
+      pageNum,
+      pageTotal,
+      updatedAt: new Date().toISOString()
+    },
+    { spaces: 0 }
+  );
+}
 
 function moduleEnabled(moduleId: string): boolean {
   return isModuleEnabled(moduleId, enabledModules);
@@ -339,7 +359,7 @@ for (const [index, mapping] of pageMappings.entries()) {
 
     const pageNum = index + 1;
     const pageTotal = pageMappings.length;
-    console.log(`[migration-progress] started ${pageNum}/${pageTotal}`);
+    emitRunProgress("started", pageNum, pageTotal);
 
     const browserName = testInfo.project.name;
     const viewport = testInfo.project.use.viewport ?? { width: 1440, height: 1200 };
@@ -459,7 +479,7 @@ for (const [index, mapping] of pageMappings.entries()) {
         }
       }
       runResults.push(report);
-      console.log(`[migration-progress] completed ${pageNum}/${pageTotal}`);
+      emitRunProgress("completed", pageNum, pageTotal);
     } finally {
       await prodPage.close().catch(() => undefined);
       await devPage.close().catch(() => undefined);

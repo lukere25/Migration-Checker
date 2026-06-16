@@ -9,7 +9,7 @@ import {
   saveAppSettings
 } from "./baseUrls";
 import { COMPARISON_MODULES, parseEnabledModulesInput, serializeEnabledModules } from "./comparisonModules";
-import { getJob, getActiveJob, isJobInProgress, listRecentRuns, previewSpreadsheet, startRun } from "./runJob";
+import { getJob, getActiveJob, isJobInProgress, listRecentRuns, previewSpreadsheet, refreshRunProgress, startRun } from "./runJob";
 import { isSpreadsheetFilename } from "./spreadsheetFile";
 import { parseHeadlessInput } from "./headless";
 import { writePagePdf } from "./reporters/pdfReporter";
@@ -265,6 +265,8 @@ app.get("/api/runs/active", (_req, res) => {
     id: activeJob.id,
     status: activeJob.status,
     pageCount: activeJob.pageCount,
+    pagesCompleted: activeJob.pagesCompleted ?? 0,
+    activePage: activeJob.activePage ?? 0,
     startedAt: activeJob.startedAt,
     summaryUrl: `/reports/${activeJob.id}/summary.html`
   });
@@ -340,6 +342,7 @@ app.get("/api/runs/:id", (req, res) => {
     sheetName: job.sheetName,
     pageCount: job.pageCount,
     pagesCompleted: job.pagesCompleted ?? 0,
+    activePage: job.activePage ?? 0,
     maxPages: job.maxPages,
     startIndex: job.startIndex,
     startedAt: job.startedAt,
@@ -364,43 +367,50 @@ app.get("/api/runs/:id/events", (req, res) => {
   res.flushHeaders();
 
   let cursor = 0;
+  let lastStatusSignature = "";
 
   const sendEvent = (event: string, data: unknown) => {
     res.write(`event: ${event}\n`);
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
 
-  const pushLogs = () => {
-    while (cursor < job.logs.length) {
-      sendEvent("log", { line: job.logs[cursor] });
-      cursor += 1;
-    }
-  };
-
-  pushLogs();
-  sendEvent("status", {
+  const buildStatusPayload = () => ({
     status: job.status,
     pageCount: job.pageCount,
     pagesCompleted: job.pagesCompleted ?? 0,
+    activePage: job.activePage ?? 0,
     error: job.error,
     summaryUrl: `/reports/${job.id}/summary.html`
   });
 
-  const interval = setInterval(() => {
-    pushLogs();
-    sendEvent("status", {
-      status: job.status,
-      pageCount: job.pageCount,
-      pagesCompleted: job.pagesCompleted ?? 0,
-      error: job.error,
-      summaryUrl: `/reports/${job.id}/summary.html`
-    });
+  const sendStatusIfChanged = () => {
+    const payload = buildStatusPayload();
+    const signature = JSON.stringify(payload);
+    if (signature === lastStatusSignature) return;
+    lastStatusSignature = signature;
+    sendEvent("status", payload);
+  };
 
-    if (job.status === "completed" || job.status === "failed") {
-      clearInterval(interval);
-      res.end();
+  const pushLogs = async () => {
+    await refreshRunProgress(job);
+    while (cursor < job.logs.length) {
+      sendEvent("log", { line: job.logs[cursor] });
+      cursor += 1;
     }
-  }, 1000);
+    sendStatusIfChanged();
+  };
+
+  void pushLogs();
+  sendStatusIfChanged();
+
+  const interval = setInterval(() => {
+    void pushLogs().then(() => {
+      if (job.status === "completed" || job.status === "failed") {
+        clearInterval(interval);
+        res.end();
+      }
+    });
+  }, 500);
 
   req.on("close", () => clearInterval(interval));
 });
@@ -408,6 +418,6 @@ app.get("/api/runs/:id/events", (req, res) => {
 app.listen(port, async () => {
   delete process.env.SHEET_NAME;
   await loadPersistedSettings();
-  console.log(`NetApp Migration Checker UI running at http://localhost:${port}`);
+  console.log(`Sync Scope UI running at http://localhost:${port}`);
   console.log("Spreadsheet mode: uploaded file only, first sheet, row 1");
 });

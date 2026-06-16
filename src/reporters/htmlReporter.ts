@@ -1,4 +1,5 @@
 import path from "path";
+import { COMPARISON_MODULES } from "../comparisonModules";
 import { config } from "../config";
 import { writeText } from "../utils/fileUtils";
 import { Issue } from "../utils/status";
@@ -10,6 +11,7 @@ import {
   renderPageSpeedBody,
   renderTextStyleBody
 } from "./moduleReportPanels";
+import { moduleScoreCardsCss, renderModuleScoreCards, renderSummaryModuleScoreCards } from "./moduleScoreCards";
 import {
   escapeReportHtml,
   pageReportDashboardCss,
@@ -33,27 +35,135 @@ function issueRows(issues: Issue[]): string {
     .join("");
 }
 
-const summaryCss = `
-  body { font-family: Arial, sans-serif; margin: 24px; color: #1f2933; }
-  a { color: #0067c5; }
-  .pill { border-radius: 999px; padding: 3px 9px; color: #fff; font-size: 12px; font-weight: 700; }
-  .pass { background: #18794e; } .fail { background: #c92a2a; } .warning { background: #b7791f; } .skipped, .info { background: #62748e; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 20px 0; }
-  .card { border: 1px solid #d9e2ec; border-radius: 8px; padding: 12px; background: #f8fafc; }
-  table { border-collapse: collapse; width: 100%; margin-top: 16px; }
-  th, td { border: 1px solid #d9e2ec; padding: 8px; vertical-align: top; text-align: left; }
-  th { background: #eef2f7; }
-  .filters button { margin-right: 8px; padding: 6px 10px; }
-  .summary-box { border: 1px solid #d9e2ec; border-radius: 10px; padding: 16px 18px; margin: 24px 0; background: #f8fafc; }
-  .summary-box h2 { margin: 0 0 8px; font-size: 1.15rem; }
-  .summary-box .scope { color: #62748e; font-size: 14px; margin: 0 0 12px; }
-  .summary-box ul { margin: 8px 0 12px 18px; color: #334e68; font-size: 14px; }
-  .summary-stats { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
-  .summary-stats span { background: #fff; border: 1px solid #d9e2ec; border-radius: 6px; padding: 6px 10px; font-size: 13px; }
+const summaryReportCss = `
+  ${pageReportDashboardCss}
+  ${moduleScoreCardsCss}
+  .stat-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+  }
+  .stat-card strong {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .stat-card .stat-value {
+    font-size: 1.75rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    line-height: 1.1;
+  }
+  .stat-card.pass .stat-value { color: #22c55e; }
+  .stat-card.fail .stat-value { color: #ef4444; }
+  .stat-card.warning .stat-value { color: #f59e0b; }
+  .summary-section {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--panel);
+    padding: 20px 22px 22px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+  }
+  .summary-section h2 {
+    margin: 0 0 8px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .summary-section .scope {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0 0 12px;
+  }
+  .summary-section ul {
+    margin: 8px 0 12px 18px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .summary-section a { color: var(--accent); word-break: break-all; }
+  .summary-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .summary-stats span {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .summary-results-panel {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--panel);
+    padding: 20px 22px 22px;
+    box-shadow: var(--shadow);
+  }
+  .summary-results-panel h2 {
+    margin: 0 0 14px;
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .filters button {
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+  }
+  .filters button:hover,
+  .filters button.is-active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .summary-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-elevated);
+  }
+  .summary-table-wrap table {
+    margin-top: 0;
+    min-width: 960px;
+  }
+  .summary-table-wrap a {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .summary-table-wrap a:hover { text-decoration: underline; }
 `;
 
 const pageReportCss = `
   ${pageReportDashboardCss}
+  ${moduleScoreCardsCss}
   ${allMetaComparisonComponentCss}
   .screens-compare {
     border: 1px solid var(--border);
@@ -128,7 +238,7 @@ function summaryTableRows(rows: ReturnType<typeof buildMetadataSummary>["rows"],
 
 function renderMetadataSummaryBox(results: PageReport[]): string {
   const summary = buildMetadataSummary(results);
-  return `<section class="summary-box" id="metadata-summary">
+  return `<section class="summary-section" id="metadata-summary">
     <h2>Metadata validation summary</h2>
     <p class="scope">${escapeReportHtml(summary.scope)}</p>
     <p class="scope"><strong>Checked:</strong></p>
@@ -149,7 +259,7 @@ function renderMetadataSummaryBox(results: PageReport[]): string {
 
 function renderBrokenLinksSummaryBox(results: PageReport[]): string {
   const summary = buildBrokenLinksSummary(results);
-  return `<section class="summary-box" id="broken-links-summary">
+  return `<section class="summary-section" id="broken-links-summary">
     <h2>Broken links summary</h2>
     <p class="scope">HTTP status checks on internal links found on each page (live and migration sites).</p>
     <div class="summary-stats">
@@ -217,22 +327,6 @@ function isReportModuleEnabled(report: PageReport, moduleId: string): boolean {
   return report.enabledModules.includes(moduleId);
 }
 
-function renderCategoryCardsBody(report: PageReport): string {
-  const cards = Object.entries(report.categories)
-    .filter(([moduleId]) => isReportModuleEnabled(report, moduleId))
-    .map(
-      ([name, result]) =>
-        `<div class="card"><strong>${escapeReportHtml(name)}</strong><br><span class="pill ${statusClass(result.status)}">${result.status}</span><p>${escapeReportHtml(result.summary)}</p></div>`
-    )
-    .join("");
-
-  if (!cards) {
-    return `<p class="panel-subtitle">No module results were included in this run.</p>`;
-  }
-
-  return `<div class="cards">${cards}</div>`;
-}
-
 function renderIssuesBody(report: PageReport): string {
   return `<table>
     <thead><tr><th>Severity</th><th>Category</th><th>Message</th><th>Prod value</th><th>Dev value</th></tr></thead>
@@ -256,24 +350,11 @@ function renderPageAccordions(report: PageReport): string {
     parts.push(
       renderAccordion({
         id: "all-meta-tags-comparison",
-        title: "All meta tags comparison",
+        title: "Metadata",
         subtitle: "Live vs migration meta tags",
         status: report.categories.metadata?.status || "PASS",
         open: true,
         body: renderAllMetaTagsComparisonBody(report)
-      })
-    );
-  }
-
-  if (isReportModuleEnabled(report, "visual")) {
-    parts.push(
-      renderAccordion({
-        id: "visual-comparison",
-        title: "Visual comparison",
-        subtitle: "Production, migration, and pixel diff",
-        status: report.categories.visual?.status || "PASS",
-        open: true,
-        body: renderVisualComparisonBody(report)
       })
     );
   }
@@ -317,19 +398,15 @@ function renderPageAccordions(report: PageReport): string {
     );
   }
 
-  const enabledCategoryCount = Object.keys(report.categories).filter((moduleId) =>
-    isReportModuleEnabled(report, moduleId)
-  ).length;
-
-  if (enabledCategoryCount) {
+  if (isReportModuleEnabled(report, "visual")) {
     parts.push(
       renderAccordion({
-        id: "category-results",
-        title: "Category results",
-        subtitle: "Status by enabled comparison module",
-        status: report.overallStatus,
-        open: false,
-        body: renderCategoryCardsBody(report)
+        id: "visual-comparison",
+        title: "Visual comparison",
+        subtitle: "Production, migration, and pixel diff",
+        status: report.categories.visual?.status || "PASS",
+        open: true,
+        body: renderVisualComparisonBody(report)
       })
     );
   }
@@ -356,13 +433,17 @@ export async function writePageHtml(report: PageReport): Promise<void> {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/sync-scope-logo.png" type="image/png">
   <title>${escapeReportHtml(report.pageName)} - ${escapeReportHtml(report.browserName)}</title>
   <style>${pageReportCss}</style>
 </head>
 <body>
   <div class="report-shell">
     <div class="report-topbar no-print">
-      <span class="accordion-subtitle">Migration comparison report</span>
+      <div class="report-brand">
+        <img src="/sync-scope-logo.png" alt="Sync Scope" class="report-brand-logo">
+        <span class="accordion-subtitle">Sync Scope report</span>
+      </div>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">Dark mode</button>
     </div>
     ${renderReportDownloadBar(report)}
@@ -376,6 +457,7 @@ export async function writePageHtml(report: PageReport): Promise<void> {
         <div><strong>Tested:</strong> ${escapeReportHtml(report.testedAt)}</div>
       </div>
     </header>
+    ${renderModuleScoreCards(report)}
     ${renderPageAccordions(report)}
   </div>
   <script>${pageReportDashboardScript}</script>
@@ -385,66 +467,118 @@ export async function writePageHtml(report: PageReport): Promise<void> {
   await writeText(report.reportPaths.html, html);
 }
 
+function categoryStatusPill(status?: string): string {
+  if (!status) return "—";
+  return `<span class="pill ${statusClass(status)}">${escapeReportHtml(status)}</span>`;
+}
+
+function renderSummaryStatCards(summary: SummaryReport): string {
+  return `<div class="stat-cards">
+    <div class="stat-card"><strong>Total pages</strong><div class="stat-value">${summary.totals.totalPages}</div></div>
+    <div class="stat-card"><strong>Browser runs</strong><div class="stat-value">${summary.totals.totalBrowserRuns}</div></div>
+    <div class="stat-card pass"><strong>Passed</strong><div class="stat-value">${summary.totals.passed}</div></div>
+    <div class="stat-card fail"><strong>Failed</strong><div class="stat-value">${summary.totals.failed}</div></div>
+    <div class="stat-card warning"><strong>Warning</strong><div class="stat-value">${summary.totals.warning}</div></div>
+    <div class="stat-card"><strong>Skipped</strong><div class="stat-value">${summary.totals.skipped}</div></div>
+  </div>`;
+}
+
 export async function writeSummaryHtml(summary: SummaryReport): Promise<void> {
+  const moduleHeaders = COMPARISON_MODULES.map((module) => `<th>${escapeReportHtml(module.label)}</th>`).join("");
+
   const rows = summary.results
     .map((report) => {
       const reportLink = path.relative(config.reportsDir, report.reportPaths.html).replace(/\\/g, "/");
       const pdfLink = report.reportPaths.pdf
         ? path.relative(config.reportsDir, report.reportPaths.pdf).replace(/\\/g, "/")
         : reportLink.replace(/index\.html$/, "index.pdf");
+      const moduleCells = COMPARISON_MODULES.map((module) => {
+        const status = report.categories[module.id]?.status;
+        return `<td>${status ? categoryStatusPill(status) : "—"}</td>`;
+      }).join("");
+
       return `<tr data-status="${report.overallStatus}">
         <td>${escapeReportHtml(report.pageName)}</td>
+        <td>${escapeReportHtml(report.path)}</td>
         <td>${escapeReportHtml(report.browserName)}</td>
-        <td><span class="pill ${statusClass(report.overallStatus)}">${report.overallStatus}</span></td>
-        <td>${escapeReportHtml(report.categories.metadata?.status)}</td>
-        <td>${escapeReportHtml(report.categories.brokenLinks?.status)}</td>
-        <td>${escapeReportHtml(report.categories.headings?.status)}</td>
-        <td>${escapeReportHtml(report.categories.content?.status)}</td>
-        <td>${escapeReportHtml(report.categories.images?.status)}</td>
-        <td>${escapeReportHtml(report.categories.links?.status)}</td>
-        <td>${escapeReportHtml(report.categories.navigation?.status)}</td>
-        <td>${escapeReportHtml(report.categories.footer?.status)}</td>
-        <td>${escapeReportHtml(report.categories.language?.status)}</td>
-        <td>${escapeReportHtml(report.categories.console?.status)}</td>
-        <td>${escapeReportHtml(report.categories.network?.status)}</td>
-        <td>${escapeReportHtml(report.categories.visual?.status)}</td>
+        <td>${categoryStatusPill(report.overallStatus)}</td>
+        ${moduleCells}
         <td>${report.blockingIssues.length}</td>
         <td>${report.warnings.length}</td>
-        <td><a href="${escapeReportHtml(reportLink)}#visual-comparison">HTML</a> · <a href="${escapeReportHtml(pdfLink)}" download>PDF</a></td>
+        <td><a href="${escapeReportHtml(reportLink)}">Report</a> · <a href="${escapeReportHtml(pdfLink)}" download>PDF</a></td>
       </tr>`;
     })
     .join("");
 
   const html = `<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>NetApp Migration Summary</title><style>${summaryCss}</style></head>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/sync-scope-logo.png" type="image/png">
+  <title>Sync Scope Summary</title>
+  <style>${summaryReportCss}</style>
+</head>
 <body>
-  <h1>NetApp Migration Summary</h1>
-  <p>Generated ${escapeReportHtml(summary.generatedAt)}</p>
-  <div class="cards">
-    <div class="card"><strong>Total pages</strong><br>${summary.totals.totalPages}</div>
-    <div class="card"><strong>Total browser runs</strong><br>${summary.totals.totalBrowserRuns}</div>
-    <div class="card"><strong>Passed</strong><br>${summary.totals.passed}</div>
-    <div class="card"><strong>Failed</strong><br>${summary.totals.failed}</div>
-    <div class="card"><strong>Warning</strong><br>${summary.totals.warning}</div>
-    <div class="card"><strong>Skipped</strong><br>${summary.totals.skipped}</div>
+  <div class="report-shell">
+    <div class="report-topbar no-print">
+      <div class="report-brand">
+        <img src="/sync-scope-logo.png" alt="Sync Scope" class="report-brand-logo">
+        <span class="accordion-subtitle">Sync Scope summary</span>
+      </div>
+      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">Dark mode</button>
+    </div>
+
+    <header class="report-header">
+      <h1>Sync Scope Summary</h1>
+      <p class="panel-subtitle">Generated ${escapeReportHtml(summary.generatedAt)}</p>
+      <div class="meta-grid">
+        <div><strong>Pages compared:</strong> ${summary.totals.totalPages}</div>
+        <div><strong>Browser runs:</strong> ${summary.totals.totalBrowserRuns}</div>
+        <div><strong>Passed:</strong> ${summary.totals.passed}</div>
+        <div><strong>Failed:</strong> ${summary.totals.failed}</div>
+      </div>
+    </header>
+
+    ${renderSummaryStatCards(summary)}
+    ${renderSummaryModuleScoreCards(summary.results)}
+    ${renderMetadataSummaryBox(summary.results)}
+    ${renderBrokenLinksSummaryBox(summary.results)}
+
+    <section class="summary-results-panel" id="results-table">
+      <h2>All page results</h2>
+      <div class="filters no-print">
+        <button type="button" class="is-active" data-filter="ALL" onclick="filterRows('ALL', this)">All</button>
+        <button type="button" data-filter="PASS" onclick="filterRows('PASS', this)">Pass</button>
+        <button type="button" data-filter="FAIL" onclick="filterRows('FAIL', this)">Fail</button>
+        <button type="button" data-filter="WARNING" onclick="filterRows('WARNING', this)">Warning</button>
+        <button type="button" data-filter="SKIPPED" onclick="filterRows('SKIPPED', this)">Skipped</button>
+      </div>
+      <div class="summary-table-wrap">
+        <table>
+          <thead><tr>
+            <th>Page name</th>
+            <th>Path</th>
+            <th>Browser</th>
+            <th>Overall</th>
+            ${moduleHeaders}
+            <th>Fails</th>
+            <th>Warnings</th>
+            <th>Report</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </section>
   </div>
-  ${renderMetadataSummaryBox(summary.results)}
-  ${renderBrokenLinksSummaryBox(summary.results)}
-  <div class="filters">
-    <button onclick="filterRows('ALL')">All</button>
-    <button onclick="filterRows('PASS')">Pass</button>
-    <button onclick="filterRows('FAIL')">Fail</button>
-    <button onclick="filterRows('WARNING')">Warning</button>
-    <button onclick="filterRows('SKIPPED')">Skipped</button>
-  </div>
-  <table><thead><tr>
-    <th>Page name</th><th>Browser/device</th><th>Overall</th><th>Metadata</th><th>Broken links</th><th>Headings</th><th>Content</th><th>Images</th><th>Links</th><th>Navigation</th><th>Footer</th><th>Language</th><th>Console</th><th>Network</th><th>Visual</th><th>Fails</th><th>Warnings</th><th>Report / PDF</th>
-  </tr></thead><tbody>${rows}</tbody></table>
   <script>
-    function filterRows(status) {
+    ${pageReportDashboardScript}
+    function filterRows(status, button) {
       document.querySelectorAll('tbody tr').forEach((row) => {
         row.style.display = status === 'ALL' || row.dataset.status === status ? '' : 'none';
+      });
+      document.querySelectorAll('.filters button').forEach((btn) => {
+        btn.classList.toggle('is-active', btn === button);
       });
     }
   </script>

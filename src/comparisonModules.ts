@@ -6,7 +6,7 @@ export interface ComparisonModule {
 
 export const COMPARISON_MODULES: ComparisonModule[] = [
   { id: "metadata", label: "Metadata", description: "Meta tags and SEO fields" },
-  { id: "visual", label: "Visual comparison", description: "Screenshots and pixel diff" },
+  { id: "language", label: "Language", description: "HTML lang attribute" },
   { id: "brokenLinks", label: "Broken links", description: "HTTP status on internal links" },
   { id: "headings", label: "Headings", description: "Heading structure and text" },
   { id: "hTagHierarchy", label: "H tag hierarchy", description: "Heading order and level skips" },
@@ -14,7 +14,7 @@ export const COMPARISON_MODULES: ComparisonModule[] = [
   { id: "pageSpeed", label: "Page speed match", description: "Load timing vs live site" },
   { id: "content", label: "Content", description: "Body text similarity" },
   { id: "images", label: "Images", description: "Image sources and alt text" },
-  { id: "language", label: "Language", description: "HTML lang attribute" }
+  { id: "visual", label: "Visual comparison", description: "Screenshots and pixel diff" }
 ];
 
 export const DEFAULT_ENABLED_MODULE_IDS = COMPARISON_MODULES.map((module) => module.id);

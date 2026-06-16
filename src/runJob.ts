@@ -32,6 +32,8 @@ export interface RunJob {
   logs: string[];
   pageCount?: number;
   pagesCompleted?: number;
+  activePage?: number;
+  progressFilePath?: string;
   reportsDir: string;
   spreadsheetPath: string;
   uploadedFilePath?: string;
@@ -91,30 +93,63 @@ function appendLog(job: RunJob, line: string): void {
 }
 
 function trackRunProgressFromLog(job: RunJob, line: string): void {
-  const startedMatch = line.match(/\[migration-progress\]\s+started\s+(\d+)\/(\d+)/i);
+  const normalized = line.replace(/^\[stderr\]\s*/, "");
+
+  const startedMatch = normalized.match(/\[migration-progress\]\s+started\s+(\d+)\/(\d+)/i);
   if (startedMatch) {
     const pageNum = Number(startedMatch[1]);
     const total = Number(startedMatch[2]);
     if (total > 0) job.pageCount = total;
-    job.pagesCompleted = Math.max(pageNum - 1, 0);
+    job.activePage = pageNum;
+    job.pagesCompleted = Math.max(job.pagesCompleted ?? 0, pageNum - 1);
     return;
   }
 
-  const progressMatch = line.match(/\[migration-progress\]\s+completed\s+(\d+)\/(\d+)/i);
+  const progressMatch = normalized.match(/\[migration-progress\]\s+completed\s+(\d+)\/(\d+)/i);
   if (progressMatch) {
     const completed = Number(progressMatch[1]);
     const total = Number(progressMatch[2]);
     if (total > 0) job.pageCount = total;
+    job.activePage = completed;
     job.pagesCompleted = completed;
     return;
   }
 
-  if (!/migration-comparison\.spec\.ts/.test(line)) return;
-  if (!/^\s*[✓×]/.test(line)) return;
+  if (!/migration-comparison\.spec\.ts/.test(normalized)) return;
+  if (!/^\s*[✓×]/.test(normalized)) return;
 
   const total = job.pageCount ?? 0;
   const next = (job.pagesCompleted ?? 0) + 1;
   job.pagesCompleted = total > 0 ? Math.min(next, total) : next;
+  job.activePage = job.pagesCompleted;
+}
+
+async function syncProgressFromFile(job: RunJob): Promise<void> {
+  if (!job.progressFilePath) return;
+
+  try {
+    if (!(await fs.pathExists(job.progressFilePath))) return;
+    const data = await fs.readJson(job.progressFilePath);
+    const pageTotal = Number(data.pageTotal);
+    const pageNum = Number(data.pageNum);
+    const phase = String(data.phase || "");
+
+    if (pageTotal > 0) job.pageCount = pageTotal;
+
+    if (phase === "started" && pageNum > 0) {
+      job.activePage = pageNum;
+      job.pagesCompleted = Math.max(job.pagesCompleted ?? 0, pageNum - 1);
+    } else if (phase === "completed" && pageNum > 0) {
+      job.activePage = pageNum;
+      job.pagesCompleted = Math.max(job.pagesCompleted ?? 0, pageNum);
+    }
+  } catch {
+    // Progress file may be mid-write; ignore parse errors.
+  }
+}
+
+export async function refreshRunProgress(job: RunJob): Promise<void> {
+  await syncProgressFromFile(job);
 }
 
 function createRunId(): string {
@@ -340,6 +375,9 @@ async function executeJob(
     await ensurePlaywrightBrowsers(job);
     job.status = "running";
     job.pagesCompleted = 0;
+    job.activePage = 0;
+    job.progressFilePath = path.join(job.reportsDir, ".run-progress.json");
+    await fs.remove(job.progressFilePath).catch(() => undefined);
     appendLog(job, "Launching browsers and comparing pages...");
 
     const exitCode = await runPlaywright(job);
@@ -494,6 +532,9 @@ function buildRunEnv(job: RunJob): NodeJS.ProcessEnv {
   env.AUTH_ALREADY_DONE = "true";
   env.GENERATE_PDF = config.generatePdf ? "true" : "false";
   env.FAST_VISUAL = config.fastVisual ? "true" : "false";
+  if (job.progressFilePath) {
+    env.RUN_PROGRESS_FILE = job.progressFilePath;
+  }
 
   return env;
 }
@@ -561,7 +602,10 @@ function runPlaywright(job: RunJob): Promise<number> {
         .split(/\r?\n/)
         .filter(Boolean)
         .filter((line) => !isIgnorableStderrLine(line))
-        .forEach((line) => appendLog(job, `[stderr] ${line}`));
+        .forEach((line) => {
+          trackRunProgressFromLog(job, line);
+          appendLog(job, `[stderr] ${line}`);
+        });
     });
 
     child.on("error", (error) => reject(error));

@@ -106,6 +106,22 @@ export const pageReportDashboardCss = `
     margin-bottom: 20px;
   }
 
+  .report-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .report-brand-logo {
+    max-height: 50px;
+    height: auto;
+    width: auto;
+    display: block;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
   .theme-toggle {
     border: 1px solid var(--border);
     background: var(--panel);
