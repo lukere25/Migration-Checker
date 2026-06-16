@@ -1,0 +1,1460 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NetApp Migration Checker</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f14;
+      --bg-elevated: #111820;
+      --panel: #151c26;
+      --panel-hover: #1a2330;
+      --border: #243044;
+      --border-focus: #3b82f6;
+      --text: #e8edf5;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --accent-soft: rgba(59, 130, 246, 0.12);
+      --pass: #22c55e;
+      --fail: #ef4444;
+      --warning: #f59e0b;
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.15), transparent),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .app-header {
+      border-bottom: 1px solid var(--border);
+      background: rgba(11, 15, 20, 0.85);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .app-header-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), #6366f1);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 14px;
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .badge {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      padding: 6px 12px;
+      border-radius: 999px;
+    }
+
+    .dashboard {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 28px 24px 64px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 960px) {
+      .dashboard {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .card + .card {
+      margin-top: 20px;
+    }
+
+    .card-title {
+      margin: 0 0 4px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .card-desc {
+      margin: 0 0 20px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .settings-card .card-desc {
+      margin-bottom: 24px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    select {
+      display: block;
+      width: 100%;
+      min-height: 46px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      margin-bottom: 16px;
+      background: var(--bg-elevated);
+      color: var(--text);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+    select:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"])::placeholder {
+      color: #5a6a82;
+    }
+
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):-webkit-autofill,
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):-webkit-autofill:hover,
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):-webkit-autofill:focus {
+      -webkit-text-fill-color: var(--text);
+      caret-color: var(--text);
+      box-shadow: 0 0 0 1000px var(--bg-elevated) inset;
+      border: 1px solid var(--border);
+    }
+
+    .source-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      background: var(--bg-elevated);
+      padding: 4px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+
+    .source-tabs button {
+      flex: 1;
+      background: transparent;
+      color: var(--muted);
+      border: 0;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .source-tabs button:hover {
+      color: var(--text);
+      background: var(--panel-hover);
+    }
+
+    .source-tabs button.active {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+    }
+
+    .source-panel.hidden { display: none; }
+
+    .file-input-wrap input[type="file"] {
+      padding: 10px;
+      cursor: pointer;
+    }
+
+    .file-input-wrap input[type="file"]::file-selector-button {
+      background: var(--accent-soft);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: var(--accent);
+      border-radius: 6px;
+      padding: 6px 12px;
+      margin-right: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .selected-file {
+      color: var(--muted);
+      font-size: 13px;
+      margin: -8px 0 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+    }
+
+    .grid label { margin-top: 0; }
+
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+      margin: -8px 0 16px;
+      line-height: 1.55;
+    }
+
+    .hint a, .hint code {
+      color: var(--accent);
+    }
+
+    .hint code {
+      background: var(--bg-elevated);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .preview-table,
+    .results-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+
+    .preview-table th,
+    .preview-table td,
+    .results-table th,
+    .results-table td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .preview-table th,
+    .results-table th {
+      background: var(--bg-elevated);
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .preview-table a,
+    .results-table a {
+      color: var(--accent);
+      word-break: break-all;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    button {
+      border: 0;
+      border-radius: var(--radius-sm);
+      padding: 12px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    button:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+    }
+
+    button.primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    button.secondary {
+      background: var(--bg-elevated);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    button.secondary:hover:not(:disabled) {
+      background: var(--panel-hover);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .status-pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .status-pill.queued,
+    .status-pill.downloading,
+    .status-pill.authenticating,
+    .status-pill.running { background: var(--accent); }
+    .status-pill.completed,
+    .status-pill.pass { background: var(--pass); }
+    .status-pill.failed,
+    .status-pill.fail { background: var(--fail); }
+    .status-pill.warning { background: var(--warning); }
+    .status-pill.skipped { background: var(--muted); }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-bottom: 16px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .meta strong {
+      color: var(--text);
+    }
+
+    .log-box {
+      background: #06090d;
+      color: #c8d4e8;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      min-height: 240px;
+      max-height: 400px;
+      overflow: auto;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    .run-progress-wrap {
+      margin-bottom: 16px;
+    }
+
+    .run-progress-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .run-progress-meta strong {
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .run-progress-track {
+      height: 10px;
+      border-radius: 999px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .run-progress-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: var(--accent);
+      transition: width 0.35s ease, background 0.25s ease;
+    }
+
+    .run-progress-bar.is-complete {
+      background: var(--pass);
+    }
+
+    .run-progress-bar.is-failed {
+      background: var(--fail);
+    }
+
+    .message {
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+
+    .message.error {
+      background: rgba(239, 68, 68, 0.12);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .message.success {
+      background: rgba(34, 197, 94, 0.12);
+      color: #86efac;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .hidden { display: none; }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      color: var(--text);
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 500;
+    }
+
+    .checkbox-row input {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      accent-color: var(--accent);
+    }
+
+    .button-link {
+      display: inline-block;
+      background: var(--pass);
+      color: #fff;
+      text-decoration: none;
+      border-radius: var(--radius-sm);
+      padding: 12px 18px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .results-heading {
+      margin: 20px 0 8px;
+      font-size: 1rem;
+    }
+
+    .settings-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 20px 0;
+    }
+
+    .url-preview {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+
+    .url-preview dt {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+    }
+
+    .url-preview dd {
+      margin: 0 0 12px;
+      word-break: break-all;
+      color: var(--text);
+    }
+
+    .url-preview dd:last-child {
+      margin-bottom: 0;
+    }
+
+    #settings-message {
+      margin-bottom: 16px;
+    }
+
+    .column-sidebar .card + .card {
+      margin-top: 20px;
+    }
+
+    .modules-card .card-desc {
+      margin-bottom: 16px;
+    }
+
+    .module-section-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .module-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .module-actions button {
+      padding: 6px 10px;
+      font-size: 12px;
+      border-radius: 6px;
+    }
+
+    .module-load-wrap {
+      margin-bottom: 16px;
+    }
+
+    .module-load-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .module-load-meta strong {
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .module-load-track {
+      height: 8px;
+      border-radius: 999px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .module-load-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: #22c55e;
+      transition: width 0.25s ease, background 0.25s ease;
+    }
+
+    .module-load-hint {
+      margin: 8px 0 0;
+      font-size: 12px;
+    }
+
+    .module-list {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      max-height: 360px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    @media (min-width: 961px) {
+      .module-list {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .module-list-empty {
+      grid-column: 1 / -1;
+      padding: 12px;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .module-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-elevated);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .module-option:hover {
+      border-color: var(--accent);
+      background: var(--panel-hover);
+    }
+
+    .module-option:has(input:checked) {
+      border-color: rgba(59, 130, 246, 0.45);
+      background: var(--accent-soft);
+    }
+
+    .module-option input {
+      width: 18px;
+      height: 18px;
+      margin: 2px 0 0;
+      flex-shrink: 0;
+      accent-color: var(--accent);
+    }
+
+    .module-option-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .module-option-text strong {
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .module-option-text span {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-header-inner">
+      <div class="brand">
+        <div class="brand-icon">MC</div>
+        <div>
+          <h1>Migration Checker</h1>
+          <p>Compare live NetApp pages against migration builds</p>
+        </div>
+      </div>
+      <span class="badge">Desktop Chrome</span>
+    </div>
+  </header>
+
+  <main class="dashboard">
+    <div class="column column-form">
+      <section class="card">
+        <h2 class="card-title">Run comparison</h2>
+        <p class="card-desc">Check a single page path or upload a spreadsheet of URL aliases. Each alias is expanded using your Live and Migration base URLs from Settings.</p>
+
+        <form id="run-form">
+          <div class="source-tabs" role="tablist">
+            <button type="button" class="active" data-source="single" role="tab" aria-selected="true">Single URL</button>
+            <button type="button" data-source="upload" role="tab" aria-selected="false">Upload file</button>
+          </div>
+
+          <div id="source-single" class="source-panel">
+            <label for="pageAlias">Page path or alias</label>
+            <input
+              id="pageAlias"
+              name="pageAlias"
+              type="text"
+              class="text-field"
+              placeholder="/artificial-intelligence/"
+            >
+            <p class="hint">Enter a path like <code>/</code> or <code>/artificial-intelligence/</code>. Live and Migration URLs are built from Settings. The comparison may take 30–90 seconds.</p>
+          </div>
+
+          <div id="source-upload" class="source-panel hidden">
+            <label for="spreadsheetFile">Excel file</label>
+            <div class="file-input-wrap">
+              <input id="spreadsheetFile" name="spreadsheet" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+            </div>
+            <p id="selected-file" class="selected-file">No file selected.</p>
+            <p class="hint">Upload a local <code>.xlsx</code> or <code>.xls</code> workbook.</p>
+          </div>
+
+          <p id="upload-hint" class="hint hidden">Expected: a column with URL aliases like <code>/artificial-intelligence/</code>. Optional Page name column. <a href="/sample-spreadsheet.xlsx" download>Download sample spreadsheet</a></p>
+
+          <div id="max-pages-wrap" class="grid hidden">
+            <div>
+              <label for="maxPages">Max pages</label>
+              <input id="maxPages" name="maxPages" type="number" min="1" placeholder="All pages">
+              <p class="hint">Uses the <strong>first sheet</strong>, starting from the <strong>first data row</strong>.</p>
+            </div>
+          </div>
+
+          <label class="checkbox-row">
+            <input type="checkbox" id="headless" name="headless" value="true" checked>
+            Run headless (no browser windows)
+          </label>
+
+          <div id="form-message" class="message hidden"></div>
+          <div id="preview-results" class="hidden"></div>
+
+          <div class="actions">
+            <button type="button" class="secondary" id="preview-btn">Preview</button>
+            <button type="submit" class="primary" id="run-btn">Run migration check</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="run-panel" class="card hidden">
+        <h2 class="card-title">Run progress</h2>
+        <div class="meta">
+          <div><strong>Run ID:</strong> <span id="run-id">-</span></div>
+          <div><strong>Status:</strong> <span id="run-status" class="status-pill queued">queued</span></div>
+          <div><strong>Pages:</strong> <span id="run-pages">-</span></div>
+        </div>
+
+        <div class="run-progress-wrap">
+          <div class="run-progress-meta">
+            <strong>Progress</strong>
+            <span id="run-progress-label">Waiting to start…</span>
+          </div>
+          <div
+            class="run-progress-track"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            id="run-progress-track"
+            aria-label="Run progress"
+          >
+            <div class="run-progress-bar" id="run-progress-bar"></div>
+          </div>
+        </div>
+
+        <div id="run-message" class="message hidden"></div>
+        <div id="summary-link-wrap" class="actions hidden">
+          <a id="summary-link" class="button-link" href="#" target="_blank" rel="noopener">Open summary report</a>
+        </div>
+        <div id="run-results" class="hidden"></div>
+        <div id="log-box" class="log-box"></div>
+      </section>
+    </div>
+
+    <aside class="column column-sidebar">
+      <section class="card settings-card">
+        <h2 class="card-title">Settings</h2>
+        <p class="card-desc">Configure the base URLs used to build live and migration page links from spreadsheet aliases.</p>
+
+        <form id="settings-form">
+          <label for="liveBaseUrl">Live URL</label>
+          <input
+            id="liveBaseUrl"
+            name="liveBaseUrl"
+            type="url"
+            class="text-field"
+            placeholder="https://www.netapp.com"
+            required
+          >
+
+          <label for="migrationBaseUrl">Migration URL</label>
+          <input
+            id="migrationBaseUrl"
+            name="migrationBaseUrl"
+            type="url"
+            class="text-field"
+            placeholder="https://netapp-e25migration.vercel.app"
+            required
+          >
+
+          <label for="migrationPassword">Migration password</label>
+          <input
+            id="migrationPassword"
+            name="migrationPassword"
+            type="password"
+            class="text-field"
+            placeholder="Site access password"
+            autocomplete="current-password"
+            required
+          >
+          <p class="hint">Used when the migration site shows a password gate before pages load.</p>
+
+          <dl class="url-preview">
+            <dt>Example alias</dt>
+            <dd><code>/artificial-intelligence/</code></dd>
+            <dt>Live page</dt>
+            <dd id="live-preview">—</dd>
+            <dt>Migration page</dt>
+            <dd id="migration-preview">—</dd>
+          </dl>
+
+          <div id="settings-message" class="message hidden"></div>
+
+          <div class="actions">
+            <button type="submit" class="primary" id="save-settings-btn">Save settings</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card modules-card">
+        <h2 class="card-title">Comparison modules</h2>
+        <p class="card-desc">Select which checks run and appear in the report.</p>
+
+        <div class="module-load-wrap">
+          <div class="module-load-meta">
+            <strong>Run load</strong>
+            <span id="module-load-count">0 / 0 selected</span>
+          </div>
+          <div class="module-load-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="module-load-track">
+            <div class="module-load-bar" id="module-load-bar"></div>
+          </div>
+          <p class="hint module-load-hint">Green = light run · Red = heavier run with more modules.</p>
+        </div>
+
+        <div class="module-section-header">
+          <span class="hint" style="margin:0">Toggle each module</span>
+          <div class="module-actions">
+            <button type="button" class="secondary" id="modules-all-btn">All</button>
+            <button type="button" class="secondary" id="modules-none-btn">None</button>
+          </div>
+        </div>
+
+        <div id="module-grid" class="module-list">
+          <p class="module-list-empty">Loading modules…</p>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+    const form = document.getElementById("run-form");
+    const settingsForm = document.getElementById("settings-form");
+    const liveBaseUrlInput = document.getElementById("liveBaseUrl");
+    const migrationBaseUrlInput = document.getElementById("migrationBaseUrl");
+    const migrationPasswordInput = document.getElementById("migrationPassword");
+    const livePreviewEl = document.getElementById("live-preview");
+    const migrationPreviewEl = document.getElementById("migration-preview");
+    const settingsMessage = document.getElementById("settings-message");
+    const previewBtn = document.getElementById("preview-btn");
+    const runBtn = document.getElementById("run-btn");
+    const formMessage = document.getElementById("form-message");
+    const previewResults = document.getElementById("preview-results");
+    const runPanel = document.getElementById("run-panel");
+    const runIdEl = document.getElementById("run-id");
+    const runStatusEl = document.getElementById("run-status");
+    const runPagesEl = document.getElementById("run-pages");
+    const runProgressBar = document.getElementById("run-progress-bar");
+    const runProgressTrack = document.getElementById("run-progress-track");
+    const runProgressLabel = document.getElementById("run-progress-label");
+    const runMessage = document.getElementById("run-message");
+    const logBox = document.getElementById("log-box");
+    const summaryLinkWrap = document.getElementById("summary-link-wrap");
+    const summaryLink = document.getElementById("summary-link");
+    const runResults = document.getElementById("run-results");
+    const sourceTabs = document.querySelectorAll(".source-tabs button");
+    const sourceSinglePanel = document.getElementById("source-single");
+    const sourceUploadPanel = document.getElementById("source-upload");
+    const maxPagesWrap = document.getElementById("max-pages-wrap");
+    const uploadHint = document.getElementById("upload-hint");
+    const pageAliasInput = document.getElementById("pageAlias");
+    const spreadsheetFileInput = document.getElementById("spreadsheetFile");
+    const selectedFileEl = document.getElementById("selected-file");
+    const moduleGrid = document.getElementById("module-grid");
+    const modulesAllBtn = document.getElementById("modules-all-btn");
+    const modulesNoneBtn = document.getElementById("modules-none-btn");
+    const moduleLoadBar = document.getElementById("module-load-bar");
+    const moduleLoadTrack = document.getElementById("module-load-track");
+    const moduleLoadCount = document.getElementById("module-load-count");
+
+    const MODULES_STORAGE_KEY = "migration-checker-enabled-modules";
+    const DEFAULT_MODULES = [
+      { id: "metadata", label: "Metadata", description: "Meta tags and SEO fields" },
+      { id: "visual", label: "Visual comparison", description: "Screenshots and pixel diff" },
+      { id: "brokenLinks", label: "Broken links", description: "HTTP status on internal links" },
+      { id: "headings", label: "Headings", description: "Heading structure and text" },
+      { id: "hTagHierarchy", label: "H tag hierarchy", description: "Heading order and level skips" },
+      { id: "textStyle", label: "Text style match", description: "Font, size, weight, and color" },
+      { id: "pageSpeed", label: "Page speed match", description: "Load timing vs live site" },
+      { id: "content", label: "Content", description: "Body text similarity" },
+      { id: "images", label: "Images", description: "Image sources and alt text" },
+      { id: "language", label: "Language", description: "HTML lang attribute" }
+    ];
+
+    let eventSource = null;
+    let activeSource = "single";
+    let currentRunId = null;
+    let lastRunProgressPercent = 0;
+
+    const runPhaseLabels = {
+      queued: "Queued",
+      downloading: "Preparing spreadsheet",
+      authenticating: "Authenticating migration site",
+      running: "Comparing pages"
+    };
+
+    function formatRunProgressLabel(status, pagesCompleted, pageCount) {
+      if (status === "completed") return "Complete";
+      if (status === "failed") return "Run failed";
+
+      const done = pagesCompleted ?? 0;
+      if (status === "running" && pageCount > 0) {
+        return `${done} / ${pageCount} pages`;
+      }
+
+      return runPhaseLabels[status] || "In progress";
+    }
+
+    function computeRunProgressPercent(status, pagesCompleted, pageCount) {
+      if (status === "completed") return 100;
+      if (status === "failed") return lastRunProgressPercent;
+
+      const phaseBase = {
+        queued: 6,
+        downloading: 14,
+        authenticating: 24,
+        running: 30
+      };
+
+      if (status === "running" && pageCount > 0) {
+        const ratio = Math.min((pagesCompleted ?? 0) / pageCount, 1);
+        return Math.round(30 + ratio * 65);
+      }
+
+      return phaseBase[status] ?? 6;
+    }
+
+    function updateRunProgressBar(status, pagesCompleted, pageCount) {
+      const percent = computeRunProgressPercent(status, pagesCompleted, pageCount);
+      lastRunProgressPercent = percent;
+
+      runProgressBar.style.width = `${percent}%`;
+      runProgressBar.classList.toggle("is-complete", status === "completed");
+      runProgressBar.classList.toggle("is-failed", status === "failed");
+      runProgressLabel.textContent = formatRunProgressLabel(status, pagesCompleted, pageCount);
+      runProgressTrack.setAttribute("aria-valuenow", String(percent));
+      runProgressTrack.setAttribute("aria-label", `Run progress ${percent}%`);
+    }
+
+    function resetRunProgressBar() {
+      lastRunProgressPercent = 0;
+      updateRunProgressBar("queued", 0, 0);
+    }
+
+    function statusPillClass(status) {
+      return String(status || "info").toLowerCase();
+    }
+
+    function joinBaseUrl(base, alias) {
+      const trimmed = String(base || "").trim().replace(/\/+$/, "");
+      const path = alias.startsWith("/") ? alias : `/${alias}`;
+      return `${trimmed}${path}`;
+    }
+
+    function updateUrlPreviews() {
+      const alias = "/artificial-intelligence/";
+      livePreviewEl.textContent = joinBaseUrl(liveBaseUrlInput.value, alias);
+      migrationPreviewEl.textContent = joinBaseUrl(migrationBaseUrlInput.value, alias);
+    }
+
+    function clearRunResults() {
+      runResults.innerHTML = "";
+      runResults.classList.add("hidden");
+    }
+
+    function renderRunResults(data) {
+      if (!data.results?.length) {
+        clearRunResults();
+        return;
+      }
+
+      const rows = data.results
+        .map(
+          (result) => `<tr>
+            <td>${escapeHtml(result.pageName)}</td>
+            <td>${escapeHtml(result.path)}</td>
+            <td>${escapeHtml(result.browserName)}</td>
+            <td><span class="status-pill ${statusPillClass(result.overallStatus)}">${escapeHtml(result.overallStatus)}</span></td>
+            <td>
+              ${result.htmlUrl ? `<a href="${escapeHtml(result.htmlUrl)}" target="_blank" rel="noopener">HTML</a>` : "—"}
+              ${result.htmlUrl && result.pdfUrl ? " · " : ""}
+              ${result.pdfUrl ? `<a href="${escapeHtml(result.pdfUrl)}" target="_blank" rel="noopener" download>PDF</a>` : ""}
+            </td>
+          </tr>`
+        )
+        .join("");
+
+      runResults.innerHTML = `<h3 class="results-heading">Page reports</h3>
+        <p class="hint">Open HTML for the full comparison view, or download the PDF report for each page.</p>
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th>Page</th>
+              <th>Path</th>
+              <th>Browser</th>
+              <th>Overall</th>
+              <th>Report</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+      runResults.classList.remove("hidden");
+    }
+
+    async function loadRunResults(runId) {
+      try {
+        const response = await fetch(`/api/runs/${runId}/results`);
+        if (!response.ok) return;
+        const data = await response.json();
+        renderRunResults(data);
+      } catch {
+        // Results may not be ready yet.
+      }
+    }
+
+    function showMessage(el, text, type) {
+      el.textContent = text;
+      el.className = `message ${type}`;
+      el.classList.remove("hidden");
+    }
+
+    function hideMessage(el) {
+      el.classList.add("hidden");
+    }
+
+    function clearPreviewResults() {
+      previewResults.innerHTML = "";
+      previewResults.classList.add("hidden");
+    }
+
+    function renderPreviewSamples(data) {
+      const rows = data.samplePages
+        .map(
+          (page) => `<tr>
+            <td>${escapeHtml(page.pageName)}</td>
+            <td>${escapeHtml(page.path)}</td>
+            <td><a href="${escapeHtml(page.liveUrl)}" target="_blank" rel="noopener">${escapeHtml(page.liveUrl)}</a></td>
+            <td><a href="${escapeHtml(page.migrationUrl)}" target="_blank" rel="noopener">${escapeHtml(page.migrationUrl)}</a></td>
+          </tr>`
+        )
+        .join("");
+
+      return `<table class="preview-table">
+        <thead>
+          <tr>
+            <th>Page</th>
+            <th>Alias</th>
+            <th>Live URL</th>
+            <th>Migration URL</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function setSource(source) {
+      activeSource = source;
+      sourceTabs.forEach((tab) => {
+        const isActive = tab.dataset.source === source;
+        tab.classList.toggle("active", isActive);
+        tab.setAttribute("aria-selected", String(isActive));
+      });
+      sourceSinglePanel.classList.toggle("hidden", source !== "single");
+      sourceUploadPanel.classList.toggle("hidden", source !== "upload");
+      maxPagesWrap.classList.toggle("hidden", source !== "upload");
+      uploadHint.classList.toggle("hidden", source !== "upload");
+    }
+
+    sourceTabs.forEach((tab) => {
+      tab.addEventListener("click", () => setSource(tab.dataset.source));
+    });
+
+    spreadsheetFileInput.addEventListener("change", () => {
+      const file = spreadsheetFileInput.files?.[0];
+      selectedFileEl.textContent = file ? `Selected: ${file.name}` : "No file selected.";
+    });
+
+    liveBaseUrlInput.addEventListener("input", updateUrlPreviews);
+    migrationBaseUrlInput.addEventListener("input", updateUrlPreviews);
+
+    function appendSettingsFields(requestData) {
+      requestData.set("liveBaseUrl", liveBaseUrlInput.value.trim());
+      requestData.set("migrationBaseUrl", migrationBaseUrlInput.value.trim());
+      requestData.set("migrationPassword", migrationPasswordInput.value);
+    }
+
+    function getSelectedModuleIds() {
+      return [...moduleGrid.querySelectorAll('input[name="enabledModules"]:checked')].map((input) => input.value);
+    }
+
+    function updateModuleLoadBar() {
+      const total = moduleGrid.querySelectorAll('input[name="enabledModules"]').length;
+      const selected = getSelectedModuleIds().length;
+      const ratio = total ? selected / total : 0;
+      const percent = Math.round(ratio * 100);
+
+      moduleLoadBar.style.width = `${percent}%`;
+
+      const hue = Math.round(120 * (1 - ratio));
+      moduleLoadBar.style.background = `hsl(${hue}, 72%, 46%)`;
+      moduleLoadCount.textContent = `${selected} / ${total} selected`;
+      moduleLoadTrack.setAttribute("aria-valuenow", String(percent));
+      moduleLoadTrack.setAttribute("aria-label", `Run load ${percent}%`);
+    }
+
+    function setAllModules(checked) {
+      moduleGrid.querySelectorAll('input[name="enabledModules"]').forEach((input) => {
+        input.checked = checked;
+      });
+      saveModuleSelection();
+      updateModuleLoadBar();
+    }
+
+    function saveModuleSelection() {
+      try {
+        localStorage.setItem(MODULES_STORAGE_KEY, JSON.stringify(getSelectedModuleIds()));
+      } catch {
+        // Ignore storage errors.
+      }
+      updateModuleLoadBar();
+    }
+
+    function restoreModuleSelection(savedIds) {
+      if (!savedIds?.length) return;
+      const saved = new Set(savedIds);
+      moduleGrid.querySelectorAll('input[name="enabledModules"]').forEach((input) => {
+        input.checked = saved.has(input.value);
+      });
+    }
+
+    function renderModuleOptions(modules) {
+      moduleGrid.innerHTML = modules
+        .map(
+          (module) => `<label class="module-option">
+            <input type="checkbox" name="enabledModules" value="${escapeHtml(module.id)}" checked>
+            <span class="module-option-text">
+              <strong>${escapeHtml(module.label)}</strong>
+              <span>${escapeHtml(module.description)}</span>
+            </span>
+          </label>`
+        )
+        .join("");
+
+      let savedIds = [];
+      try {
+        savedIds = JSON.parse(localStorage.getItem(MODULES_STORAGE_KEY) || "[]");
+      } catch {
+        savedIds = [];
+      }
+      restoreModuleSelection(Array.isArray(savedIds) ? savedIds : []);
+
+      moduleGrid.querySelectorAll('input[name="enabledModules"]').forEach((input) => {
+        input.addEventListener("change", saveModuleSelection);
+      });
+
+      updateModuleLoadBar();
+    }
+
+    async function loadModules() {
+      try {
+        const response = await fetch("/api/modules");
+        if (!response.ok) throw new Error("Modules API unavailable");
+        const data = await response.json();
+        renderModuleOptions(data.modules?.length ? data.modules : DEFAULT_MODULES);
+      } catch {
+        renderModuleOptions(DEFAULT_MODULES);
+      }
+    }
+
+    function appendEnabledModules(requestData) {
+      const selected = getSelectedModuleIds();
+      if (!selected.length) {
+        throw new Error("Select at least one comparison module.");
+      }
+      selected.forEach((moduleId) => requestData.append("enabledModules", moduleId));
+    }
+
+    modulesAllBtn.addEventListener("click", () => setAllModules(true));
+    modulesNoneBtn.addEventListener("click", () => setAllModules(false));
+
+    function buildRequestFormData() {
+      const data = new FormData(form);
+      const requestData = new FormData();
+
+      const maxPages = data.get("maxPages");
+      if (maxPages) requestData.set("maxPages", String(maxPages));
+
+      requestData.set("headless", document.getElementById("headless").checked ? "true" : "false");
+      appendSettingsFields(requestData);
+      appendEnabledModules(requestData);
+
+      if (activeSource === "upload") {
+        const file = spreadsheetFileInput.files?.[0];
+        if (!file) throw new Error("Choose an Excel file to upload.");
+        requestData.set("spreadsheet", file, file.name);
+      } else {
+        const pageAlias = String(pageAliasInput.value || "").trim();
+        if (!pageAlias) throw new Error("Enter a page path or alias.");
+        requestData.set("pageAlias", pageAlias);
+      }
+
+      return requestData;
+    }
+
+    function setRunningState(isRunning) {
+      previewBtn.disabled = isRunning;
+      runBtn.disabled = isRunning;
+    }
+
+    function updateStatus(status, pageCount, pagesCompleted, error, summaryUrl) {
+      runStatusEl.textContent = status;
+      runStatusEl.className = `status-pill ${status}`;
+      if (pageCount != null) runPagesEl.textContent = String(pageCount);
+      updateRunProgressBar(status, pagesCompleted ?? 0, pageCount ?? 0);
+
+      if (status === "completed") {
+        showMessage(runMessage, "Migration comparison finished. Open the summary or download PDF reports below.", "success");
+        summaryLink.href = summaryUrl;
+        summaryLinkWrap.classList.remove("hidden");
+        setRunningState(false);
+        if (currentRunId) void loadRunResults(currentRunId);
+      } else if (status === "failed") {
+        showMessage(runMessage, error || "Migration comparison failed.", "error");
+        setRunningState(false);
+        clearRunResults();
+      } else {
+        hideMessage(runMessage);
+        summaryLinkWrap.classList.add("hidden");
+        clearRunResults();
+      }
+    }
+
+    function appendLog(line) {
+      logBox.textContent += `${line}\n`;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function watchRun(runId) {
+      if (eventSource) eventSource.close();
+      currentRunId = runId;
+      sessionStorage.setItem("lastRunId", runId);
+      runPanel.classList.remove("hidden");
+      runIdEl.textContent = runId;
+      logBox.textContent = "";
+      hideMessage(runMessage);
+      summaryLinkWrap.classList.add("hidden");
+      clearRunResults();
+      resetRunProgressBar();
+      updateStatus("queued", null, 0);
+
+      eventSource = new EventSource(`/api/runs/${runId}/events`);
+
+      eventSource.addEventListener("log", (event) => {
+        const data = JSON.parse(event.data);
+        appendLog(data.line);
+      });
+
+      eventSource.addEventListener("status", (event) => {
+        const data = JSON.parse(event.data);
+        updateStatus(data.status, data.pageCount, data.pagesCompleted, data.error, data.summaryUrl);
+        if (data.status === "completed" || data.status === "failed") {
+          eventSource.close();
+          eventSource = null;
+        }
+      });
+
+      eventSource.onerror = () => {
+        if (eventSource) eventSource.close();
+        eventSource = null;
+      };
+    }
+
+    async function loadSettings() {
+      try {
+        const response = await fetch("/api/settings");
+        if (!response.ok) return;
+        const data = await response.json();
+        liveBaseUrlInput.value = data.liveBaseUrl || "";
+        migrationBaseUrlInput.value = data.migrationBaseUrl || "";
+        migrationPasswordInput.value = data.migrationPassword || "";
+        updateUrlPreviews();
+      } catch {
+        updateUrlPreviews();
+      }
+    }
+
+    settingsForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      hideMessage(settingsMessage);
+
+      try {
+        const response = await fetch("/api/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            liveBaseUrl: liveBaseUrlInput.value.trim(),
+            migrationBaseUrl: migrationBaseUrlInput.value.trim(),
+            migrationPassword: migrationPasswordInput.value
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not save settings");
+
+        liveBaseUrlInput.value = data.liveBaseUrl;
+        migrationBaseUrlInput.value = data.migrationBaseUrl;
+        migrationPasswordInput.value = data.migrationPassword || "";
+        updateUrlPreviews();
+        showMessage(settingsMessage, "Settings saved.", "success");
+      } catch (error) {
+        showMessage(settingsMessage, error.message, "error");
+      }
+    });
+
+    previewBtn.addEventListener("click", async () => {
+      hideMessage(formMessage);
+      clearPreviewResults();
+      previewBtn.disabled = true;
+
+      try {
+        const response = await fetch("/api/preview", {
+          method: "POST",
+          body: buildRequestFormData()
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Preview failed");
+
+        showMessage(
+          formMessage,
+          activeSource === "single"
+            ? `Ready to compare 1 page (${data.samplePages?.[0]?.path || pageAliasInput.value.trim()}).`
+            : `Found ${data.pageCount} page(s) on first sheet "${data.sheetName}".`,
+          "success"
+        );
+
+        if (data.samplePages?.length) {
+          previewResults.innerHTML = renderPreviewSamples(data);
+          previewResults.classList.remove("hidden");
+        }
+      } catch (error) {
+        showMessage(formMessage, error.message, "error");
+      } finally {
+        previewBtn.disabled = false;
+      }
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      hideMessage(formMessage);
+      clearPreviewResults();
+      setRunningState(true);
+
+      try {
+        const response = await fetch("/api/runs", {
+          method: "POST",
+          body: buildRequestFormData()
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not start run");
+
+        watchRun(data.id);
+      } catch (error) {
+        showMessage(formMessage, error.message, "error");
+        setRunningState(false);
+      }
+    });
+
+    async function reconnectActiveRun() {
+      try {
+        const response = await fetch("/api/runs/active");
+        const data = await response.json();
+        if (response.ok && data.active && data.id) {
+          setRunningState(true);
+          watchRun(data.id);
+          showMessage(
+            formMessage,
+            `Resumed tracking run ${data.id} (${data.status}).`,
+            "success"
+          );
+          return;
+        }
+
+        const lastRunId = sessionStorage.getItem("lastRunId");
+        if (!lastRunId) return;
+
+        const jobResponse = await fetch(`/api/runs/${lastRunId}`);
+        if (!jobResponse.ok) return;
+
+        const job = await jobResponse.json();
+        if (job.status !== "completed" && job.status !== "failed") return;
+
+        currentRunId = lastRunId;
+        runPanel.classList.remove("hidden");
+        runIdEl.textContent = lastRunId;
+        updateStatus(job.status, job.pageCount, job.pagesCompleted, job.error, job.summaryUrl);
+        if (job.status === "completed") {
+          await loadRunResults(lastRunId);
+        }
+      } catch {
+        // Ignore — no active run to reconnect.
+      }
+    }
+
+    setSource("single");
+    void loadSettings();
+    void loadModules();
+    void reconnectActiveRun();
+  </script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "name": "netapp-migration-checker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "One-time NetApp production to migration regression comparison tool.",
+  "scripts": {
+    "install:browsers": "playwright install chromium chrome",
+    "install:browsers:all": "playwright install chromium webkit chrome",
+    "start": "ts-node src/server.ts",
+    "auth:dev": "ts-node src/auth.ts",
+    "test:migration": "PLAYWRIGHT_HEADLESS=true playwright test tests/migration-comparison.spec.ts --project=chromium-desktop",
+    "report": "open reports/summary.html"
+  },
+  "devDependencies": {
+    "@playwright/test": "latest",
+    "@types/express": "latest",
+    "@types/multer": "latest",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "latest",
+    "@types/pngjs": "^6.0.5",
+    "express": "latest",
+    "multer": "latest",
+    "fast-glob": "latest",
+    "fs-extra": "latest",
+    "pixelmatch": "latest",
+    "pngjs": "latest",
+    "string-similarity": "latest",
+    "ts-node": "latest",
+    "typescript": "latest",
+    "xlsx": "latest"
+  }
+}
