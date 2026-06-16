@@ -91,6 +91,15 @@ function appendLog(job: RunJob, line: string): void {
 }
 
 function trackRunProgressFromLog(job: RunJob, line: string): void {
+  const startedMatch = line.match(/\[migration-progress\]\s+started\s+(\d+)\/(\d+)/i);
+  if (startedMatch) {
+    const pageNum = Number(startedMatch[1]);
+    const total = Number(startedMatch[2]);
+    if (total > 0) job.pageCount = total;
+    job.pagesCompleted = Math.max(pageNum - 1, 0);
+    return;
+  }
+
   const progressMatch = line.match(/\[migration-progress\]\s+completed\s+(\d+)\/(\d+)/i);
   if (progressMatch) {
     const completed = Number(progressMatch[1]);

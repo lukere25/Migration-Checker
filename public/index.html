@@ -478,6 +478,7 @@
 
     .run-progress-track.is-indeterminate .run-progress-bar {
       width: 42%;
+      transition: none;
       animation: run-progress-slide 1.35s ease-in-out infinite;
     }
 
@@ -817,6 +818,27 @@
             <button type="button" class="secondary" id="preview-btn">Preview</button>
             <button type="submit" class="primary" id="run-btn">Run migration check</button>
           </div>
+
+          <div id="active-run-progress" class="active-run-progress hidden" aria-live="polite">
+            <div class="run-progress-meta">
+              <strong>Run progress</strong>
+              <span>
+                <span id="active-run-progress-label">Starting…</span>
+                <span class="run-progress-percent" id="active-run-progress-percent">0%</span>
+              </span>
+            </div>
+            <div
+              class="run-progress-track"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+              id="active-run-progress-track"
+              aria-label="Run progress"
+            >
+              <div class="run-progress-bar" id="active-run-progress-bar"></div>
+            </div>
+          </div>
         </form>
       </section>
 
@@ -968,6 +990,25 @@
     const runProgressBar = document.getElementById("run-progress-bar");
     const runProgressTrack = document.getElementById("run-progress-track");
     const runProgressLabel = document.getElementById("run-progress-label");
+    const activeRunProgressWrap = document.getElementById("active-run-progress");
+    const activeRunProgressBar = document.getElementById("active-run-progress-bar");
+    const activeRunProgressTrack = document.getElementById("active-run-progress-track");
+    const activeRunProgressLabel = document.getElementById("active-run-progress-label");
+    const activeRunProgressPercent = document.getElementById("active-run-progress-percent");
+    const runProgressTargets = [
+      {
+        bar: runProgressBar,
+        track: runProgressTrack,
+        label: runProgressLabel,
+        percent: null
+      },
+      {
+        bar: activeRunProgressBar,
+        track: activeRunProgressTrack,
+        label: activeRunProgressLabel,
+        percent: activeRunProgressPercent
+      }
+    ];
     const runMessage = document.getElementById("run-message");
     const logBox = document.getElementById("log-box");
     const summaryLinkWrap = document.getElementById("summary-link-wrap");
@@ -1005,6 +1046,7 @@
 
     let eventSource = null;
     let activeSource = "single";
+    let currentRunStatus = "queued";
     let currentRunId = null;
     let lastRunProgressPercent = 0;
 
@@ -1049,13 +1091,52 @@
     function updateRunProgressBar(status, pagesCompleted, pageCount) {
       const percent = computeRunProgressPercent(status, pagesCompleted, pageCount);
       lastRunProgressPercent = percent;
+      const label = formatRunProgressLabel(status, pagesCompleted, pageCount);
+      const indeterminate =
+        status !== "completed" &&
+        status !== "failed" &&
+        ["queued", "downloading", "authenticating"].includes(status);
 
-      runProgressBar.style.width = `${percent}%`;
-      runProgressBar.classList.toggle("is-complete", status === "completed");
-      runProgressBar.classList.toggle("is-failed", status === "failed");
-      runProgressLabel.textContent = formatRunProgressLabel(status, pagesCompleted, pageCount);
-      runProgressTrack.setAttribute("aria-valuenow", String(percent));
-      runProgressTrack.setAttribute("aria-label", `Run progress ${percent}%`);
+      for (const target of runProgressTargets) {
+        target.bar.style.width = indeterminate ? "" : `${percent}%`;
+        target.bar.classList.toggle("is-complete", status === "completed");
+        target.bar.classList.toggle("is-failed", status === "failed");
+        target.track.classList.toggle("is-indeterminate", indeterminate);
+        target.label.textContent = label;
+        target.track.setAttribute("aria-valuenow", String(percent));
+        target.track.setAttribute("aria-label", `Run progress ${percent}%`);
+        if (target.percent) target.percent.textContent = `${percent}%`;
+      }
+    }
+
+    function applyProgressFromLogLine(line) {
+      const text = String(line);
+
+      const startedMatch = text.match(/\[migration-progress\]\s+started\s+(\d+)\/(\d+)/i);
+      if (startedMatch) {
+        const pageNum = Number(startedMatch[1]);
+        const pageTotal = Number(startedMatch[2]);
+        if (pageTotal > 0) runPagesEl.textContent = String(pageTotal);
+        const status = currentRunStatus === "queued" ? "running" : currentRunStatus;
+        for (const target of runProgressTargets) {
+          target.label.textContent = `Comparing page ${pageNum} of ${pageTotal}`;
+        }
+        updateRunProgressBar(status, Math.max(pageNum - 1, 0), pageTotal);
+        return;
+      }
+
+      const match = text.match(/\[migration-progress\]\s+completed\s+(\d+)\/(\d+)/i);
+      if (!match) return;
+
+      const pagesCompleted = Number(match[1]);
+      const pageCount = Number(match[2]);
+      if (pageCount > 0) runPagesEl.textContent = String(pageCount);
+      const status = currentRunStatus === "queued" ? "running" : currentRunStatus;
+      updateRunProgressBar(status, pagesCompleted, pageCount);
+    }
+
+    function showActiveRunProgress(visible) {
+      activeRunProgressWrap.classList.toggle("hidden", !visible);
     }
 
     function resetRunProgressBar() {
@@ -1402,9 +1483,11 @@
     function setRunningState(isRunning) {
       previewBtn.disabled = isRunning;
       runBtn.disabled = isRunning;
+      if (isRunning) showActiveRunProgress(true);
     }
 
     function updateStatus(status, pageCount, pagesCompleted, error, summaryUrl) {
+      currentRunStatus = status;
       runStatusEl.textContent = status;
       runStatusEl.className = `status-pill ${status}`;
       if (pageCount != null) runPagesEl.textContent = String(pageCount);
@@ -1432,6 +1515,7 @@
     function appendLog(line) {
       logBox.textContent += `${line}\n`;
       logBox.scrollTop = logBox.scrollHeight;
+      applyProgressFromLogLine(line);
     }
 
     function watchRun(runId) {
@@ -1439,6 +1523,7 @@
       currentRunId = runId;
       sessionStorage.setItem("lastRunId", runId);
       runPanel.classList.remove("hidden");
+      showActiveRunProgress(true);
       runIdEl.textContent = runId;
       logBox.textContent = "";
       hideMessage(runMessage);
@@ -1447,6 +1532,7 @@
       resetRunProgressBar();
       updateStatus("queued", null, 0);
       void loadRecentRuns();
+      activeRunProgressWrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
       eventSource = new EventSource(`/api/runs/${runId}/events`);
 
@@ -1548,6 +1634,8 @@
       hideMessage(formMessage);
       clearPreviewResults();
       setRunningState(true);
+      resetRunProgressBar();
+      updateRunProgressBar("queued", 0, 0);
 
       try {
         const response = await fetch("/api/runs", {
