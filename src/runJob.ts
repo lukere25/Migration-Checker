@@ -69,10 +69,17 @@ function recoverStaleActiveJob(): void {
   }
 
   if (job.status === "running" && !isPlaywrightProcessRunning()) {
-    job.status = "failed";
-    job.finishedAt = new Date().toISOString();
-    job.error = "Run stopped unexpectedly. You can start a new comparison.";
-    appendLog(job, job.error);
+    if (hasSummaryResultsSync(job.reportsDir)) {
+      job.status = "completed";
+      job.finishedAt = new Date().toISOString();
+      if (job.pageCount) job.pagesCompleted = job.pageCount;
+      appendLog(job, "Migration comparison completed successfully");
+    } else {
+      job.status = "failed";
+      job.finishedAt = new Date().toISOString();
+      job.error = "Run stopped unexpectedly. You can start a new comparison.";
+      appendLog(job, job.error);
+    }
     activeJobId = null;
     activePlaywrightProcess = null;
   }
@@ -102,6 +109,7 @@ function trackRunProgressFromLog(job: RunJob, line: string): void {
     if (total > 0) job.pageCount = total;
     job.activePage = pageNum;
     job.pagesCompleted = Math.max(job.pagesCompleted ?? 0, pageNum - 1);
+    job.status = "running";
     return;
   }
 
@@ -112,6 +120,18 @@ function trackRunProgressFromLog(job: RunJob, line: string): void {
     if (total > 0) job.pageCount = total;
     job.activePage = completed;
     job.pagesCompleted = completed;
+    job.status = "running";
+    return;
+  }
+
+  const finishingMatch = normalized.match(/\[migration-progress\]\s+finishing\s+(\d+)\/(\d+)/i);
+  if (finishingMatch) {
+    const total = Number(finishingMatch[2]);
+    const completed = Number(finishingMatch[1]);
+    if (total > 0) job.pageCount = total;
+    job.pagesCompleted = completed;
+    job.activePage = completed;
+    job.status = "running";
     return;
   }
 
@@ -122,6 +142,57 @@ function trackRunProgressFromLog(job: RunJob, line: string): void {
   const next = (job.pagesCompleted ?? 0) + 1;
   job.pagesCompleted = total > 0 ? Math.min(next, total) : next;
   job.activePage = job.pagesCompleted;
+  job.status = "running";
+}
+
+function hasSummaryResultsSync(reportsDir: string): boolean {
+  const summaryPath = path.join(reportsDir, "summary.json");
+  if (!fs.existsSync(summaryPath)) return false;
+  try {
+    const summary = fs.readJsonSync(summaryPath);
+    return Array.isArray(summary.results) && summary.results.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function maybeFinalizeJob(job: RunJob): Promise<void> {
+  if (job.status === "completed" || job.status === "failed") return;
+
+  const playwrightRunning = isPlaywrightProcessRunning();
+  const hasSummary = await runHasSummaryResults(job.reportsDir);
+
+  if (hasSummary && !playwrightRunning) {
+    job.status = "completed";
+    job.finishedAt = job.finishedAt ?? new Date().toISOString();
+    if (job.pageCount) job.pagesCompleted = job.pageCount;
+    if (!job.logs.some((line) => /Migration comparison completed/i.test(line))) {
+      appendLog(job, "Migration comparison completed successfully");
+    }
+    if (activeJobId === job.id) {
+      activeJobId = null;
+      activePlaywrightProcess = null;
+    }
+    return;
+  }
+
+  if (job.status === "running" && !playwrightRunning) {
+    if (hasSummaryResultsSync(job.reportsDir)) {
+      job.status = "completed";
+      job.finishedAt = new Date().toISOString();
+      if (job.pageCount) job.pagesCompleted = job.pageCount;
+      appendLog(job, "Migration comparison completed successfully");
+    } else {
+      job.status = "failed";
+      job.finishedAt = new Date().toISOString();
+      job.error = "Run stopped unexpectedly. You can start a new comparison.";
+      appendLog(job, job.error);
+    }
+    if (activeJobId === job.id) {
+      activeJobId = null;
+      activePlaywrightProcess = null;
+    }
+  }
 }
 
 async function syncProgressFromFile(job: RunJob): Promise<void> {
@@ -139,9 +210,15 @@ async function syncProgressFromFile(job: RunJob): Promise<void> {
     if (phase === "started" && pageNum > 0) {
       job.activePage = pageNum;
       job.pagesCompleted = Math.max(job.pagesCompleted ?? 0, pageNum - 1);
+      job.status = "running";
     } else if (phase === "completed" && pageNum > 0) {
       job.activePage = pageNum;
       job.pagesCompleted = Math.max(job.pagesCompleted ?? 0, pageNum);
+      job.status = "running";
+    } else if (phase === "finishing" && pageNum > 0) {
+      job.activePage = pageNum;
+      job.pagesCompleted = pageNum;
+      job.status = "running";
     }
   } catch {
     // Progress file may be mid-write; ignore parse errors.
@@ -150,6 +227,7 @@ async function syncProgressFromFile(job: RunJob): Promise<void> {
 
 export async function refreshRunProgress(job: RunJob): Promise<void> {
   await syncProgressFromFile(job);
+  await maybeFinalizeJob(job);
 }
 
 function createRunId(): string {
@@ -159,6 +237,13 @@ function createRunId(): string {
 
 export function getJob(runId: string): RunJob | undefined {
   return jobs.get(runId);
+}
+
+export async function getJobWithProgress(runId: string): Promise<RunJob | undefined> {
+  const job = jobs.get(runId);
+  if (!job) return undefined;
+  await refreshRunProgress(job);
+  return job;
 }
 
 export function listJobs(): RunJob[] {
@@ -372,8 +457,9 @@ async function executeJob(
     appendLog(job, "Migration authentication ready");
 
     await fs.ensureDir(job.reportsDir);
-    await ensurePlaywrightBrowsers(job);
     job.status = "running";
+    appendLog(job, "Preparing Playwright browsers...");
+    await ensurePlaywrightBrowsers(job);
     job.pagesCompleted = 0;
     job.activePage = 0;
     job.progressFilePath = path.join(job.reportsDir, ".run-progress.json");

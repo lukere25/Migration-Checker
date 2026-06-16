@@ -88,7 +88,7 @@ const emptyMetadata: Metadata = {
   allMeta: []
 };
 
-function emitRunProgress(phase: "started" | "completed", pageNum: number, pageTotal: number): void {
+function emitRunProgress(phase: "started" | "completed" | "finishing", pageNum: number, pageTotal: number): void {
   const line = `[migration-progress] ${phase} ${pageNum}/${pageTotal}`;
   process.stdout.write(`${line}\n`);
 
@@ -331,14 +331,24 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  if (sharedDevBrowser) {
-    await sharedDevBrowser.close();
-    sharedDevBrowser = null;
+  const pageTotal = pageMappings.length;
+
+  async function closeBrowserSafe(browser: Browser | null): Promise<void> {
+    if (!browser) return;
+    await Promise.race([
+      browser.close(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("browser close timeout")), 15000))
+    ]).catch(() => undefined);
   }
-  if (sharedLiveBrowser) {
-    await sharedLiveBrowser.close();
-    sharedLiveBrowser = null;
+
+  if (pageTotal > 0) {
+    emitRunProgress("finishing", pageTotal, pageTotal);
   }
+
+  await closeBrowserSafe(sharedDevBrowser);
+  sharedDevBrowser = null;
+  await closeBrowserSafe(sharedLiveBrowser);
+  sharedLiveBrowser = null;
 
   if (!runResults.length) return;
 

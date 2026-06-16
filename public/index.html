@@ -52,7 +52,7 @@
     .app-header-inner {
       max-width: 1280px;
       margin: 0 auto;
-      padding: 20px 24px;
+      padding: 5px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -1041,6 +1041,7 @@
     ];
 
     let eventSource = null;
+    let runPollTimer = null;
     let activeSource = "single";
     let currentRunStatus = "queued";
     let currentRunId = null;
@@ -1065,6 +1066,7 @@
       if (status === "failed") return "Run failed";
 
       if (status === "running" && activePage > 0 && pageCount > 0) {
+        if (pagesCompleted >= pageCount) return "Generating summary report…";
         return `Comparing page ${activePage} of ${pageCount}`;
       }
 
@@ -1124,11 +1126,6 @@
     }
 
     function syncRunProgress(patch) {
-      if (patch.status) {
-        runProgressState.status = patch.status;
-        currentRunStatus = patch.status;
-      }
-
       if (patch.pageCount != null && patch.pageCount > 0) {
         runProgressState.pageCount = patch.pageCount;
       }
@@ -1141,12 +1138,37 @@
         runProgressState.activePage = Math.max(runProgressState.activePage, patch.activePage);
       }
 
+      const hasPageProgress =
+        runProgressState.pagesCompleted > 0 ||
+        runProgressState.activePage > 0 ||
+        (patch.pagesCompleted ?? 0) > 0 ||
+        (patch.activePage ?? 0) > 0;
+
+      let nextStatus = patch.status || runProgressState.status;
+      if (
+        hasPageProgress &&
+        nextStatus !== "completed" &&
+        nextStatus !== "failed" &&
+        (nextStatus === "queued" || nextStatus === "downloading" || nextStatus === "authenticating")
+      ) {
+        nextStatus = "running";
+      }
+
+      if (nextStatus) {
+        runProgressState.status = nextStatus;
+        currentRunStatus = nextStatus;
+      }
+
       if (patch.status === "completed" && runProgressState.pageCount > 0) {
         runProgressState.pagesCompleted = runProgressState.pageCount;
         runProgressState.activePage = runProgressState.pageCount;
       }
 
-      if (patch.status === "queued" || patch.status === "downloading" || patch.status === "authenticating") {
+      if (
+        nextStatus === "queued" ||
+        nextStatus === "downloading" ||
+        nextStatus === "authenticating"
+      ) {
         runProgressState.pagesCompleted = patch.pagesCompleted ?? 0;
         runProgressState.activePage = patch.activePage ?? 0;
       }
@@ -1171,10 +1193,21 @@
         const pageNum = Number(startedMatch[1]);
         const pageTotal = Number(startedMatch[2]);
         syncRunProgress({
-          status: currentRunStatus === "queued" ? "running" : currentRunStatus,
+          status: "running",
           pageCount: pageTotal,
           activePage: pageNum,
           pagesCompleted: Math.max(pageNum - 1, 0)
+        });
+        return;
+      }
+
+      const finishingMatch = text.match(/\[migration-progress\]\s+finishing\s+(\d+)\/(\d+)/i);
+      if (finishingMatch) {
+        syncRunProgress({
+          status: "running",
+          pageCount: Number(finishingMatch[2]),
+          pagesCompleted: Number(finishingMatch[1]),
+          activePage: Number(finishingMatch[1])
         });
         return;
       }
@@ -1183,7 +1216,7 @@
       if (!match) return;
 
       syncRunProgress({
-        status: currentRunStatus === "queued" ? "running" : currentRunStatus,
+        status: "running",
         pageCount: Number(match[2]),
         pagesCompleted: Number(match[1]),
         activePage: Number(match[1])
@@ -1584,8 +1617,40 @@
       applyProgressFromLogLine(line);
     }
 
+    function stopRunTracking() {
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      if (runPollTimer) {
+        clearInterval(runPollTimer);
+        runPollTimer = null;
+      }
+    }
+
+    async function pollRunStatus(runId) {
+      try {
+        const response = await fetch(`/api/runs/${runId}`);
+        if (!response.ok) return;
+        const job = await response.json();
+        updateStatus(
+          job.status,
+          job.pageCount,
+          job.pagesCompleted,
+          job.error,
+          job.summaryUrl,
+          job.activePage
+        );
+        if (job.status === "completed" || job.status === "failed") {
+          stopRunTracking();
+        }
+      } catch {
+        // Ignore transient polling errors.
+      }
+    }
+
     function watchRun(runId) {
-      if (eventSource) eventSource.close();
+      stopRunTracking();
       currentRunId = runId;
       sessionStorage.setItem("lastRunId", runId);
       runPanel.classList.remove("hidden");
@@ -1601,6 +1666,9 @@
       activeRunProgressWrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
       eventSource = new EventSource(`/api/runs/${runId}/events`);
+      runPollTimer = setInterval(() => {
+        void pollRunStatus(runId);
+      }, 2000);
 
       eventSource.addEventListener("log", (event) => {
         const data = JSON.parse(event.data);
@@ -1618,14 +1686,15 @@
           data.activePage
         );
         if (data.status === "completed" || data.status === "failed") {
-          eventSource.close();
-          eventSource = null;
+          stopRunTracking();
         }
       });
 
       eventSource.onerror = () => {
-        if (eventSource) eventSource.close();
-        eventSource = null;
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
       };
     }
 

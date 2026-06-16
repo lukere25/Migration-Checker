@@ -9,7 +9,7 @@ import {
   saveAppSettings
 } from "./baseUrls";
 import { COMPARISON_MODULES, parseEnabledModulesInput, serializeEnabledModules } from "./comparisonModules";
-import { getJob, getActiveJob, isJobInProgress, listRecentRuns, previewSpreadsheet, refreshRunProgress, startRun } from "./runJob";
+import { getJob, getActiveJob, getJobWithProgress, isJobInProgress, listRecentRuns, previewSpreadsheet, refreshRunProgress, startRun } from "./runJob";
 import { isSpreadsheetFilename } from "./spreadsheetFile";
 import { parseHeadlessInput } from "./headless";
 import { writePagePdf } from "./reporters/pdfReporter";
@@ -253,12 +253,14 @@ app.post("/api/runs", handleMulterUpload("spreadsheet"), async (req, res) => {
   }
 });
 
-app.get("/api/runs/active", (_req, res) => {
+app.get("/api/runs/active", async (_req, res) => {
   const activeJob = getActiveJob();
   if (!activeJob) {
     res.json({ active: false });
     return;
   }
+
+  await refreshRunProgress(activeJob);
 
   res.json({
     active: isJobInProgress(activeJob),
@@ -328,8 +330,8 @@ app.get("/api/runs/:id/results", async (req, res) => {
   }
 });
 
-app.get("/api/runs/:id", (req, res) => {
-  const job = getJob(req.params.id);
+app.get("/api/runs/:id", async (req, res) => {
+  const job = await getJobWithProgress(req.params.id);
   if (!job) {
     res.status(404).json({ error: "Run not found" });
     return;
