@@ -13,6 +13,7 @@ import { getJob, getActiveJob, getJobWithProgress, isJobInProgress, listRecentRu
 import { isSpreadsheetFilename } from "./spreadsheetFile";
 import { parseHeadlessInput } from "./headless";
 import { writePagePdf } from "./reporters/pdfReporter";
+import { normalizePath } from "./utils/normalize";
 
 delete process.env.SHEET_NAME;
 delete process.env.START_INDEX;
@@ -110,13 +111,16 @@ function parseEnabledModulesField(body: Record<string, unknown> | undefined): st
 
 function parseRunFields(body: Record<string, unknown> | undefined) {
   const fields = body ?? {};
+  const rawPageAlias = typeof fields.pageAlias === "string" ? fields.pageAlias.trim() : "";
+  const pageAlias = rawPageAlias ? normalizePath(rawPageAlias) || rawPageAlias : "";
+
   return {
     maxPages: parseOptionalNumber(fields.maxPages),
     headless: parseHeadlessInput(fields.headless),
     liveBaseUrl: typeof fields.liveBaseUrl === "string" ? fields.liveBaseUrl.trim() : "",
     migrationBaseUrl: typeof fields.migrationBaseUrl === "string" ? fields.migrationBaseUrl.trim() : "",
     migrationPassword: typeof fields.migrationPassword === "string" ? fields.migrationPassword : "",
-    pageAlias: typeof fields.pageAlias === "string" ? fields.pageAlias.trim() : "",
+    pageAlias,
     enabledModules: parseEnabledModulesField(body)
   };
 }

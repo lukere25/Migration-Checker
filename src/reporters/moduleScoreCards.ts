@@ -1,21 +1,42 @@
-import { COMPARISON_MODULES } from "../comparisonModules";
+import { COMPARISON_MODULES, normalizeEnabledModuleIds } from "../comparisonModules";
 import { getMetadataCheckItems } from "../comparators/metadataComparator";
 import { CategoryResult, Status } from "../utils/status";
 import { PageReport } from "./reportTypes";
 import { escapeReportHtml, statusClass } from "./pageReportLayout";
 
-const MODULE_ANCHORS: Record<string, string> = {
+export const MODULE_PAGE_ANCHORS: Record<string, string> = {
   metadata: "all-meta-tags-comparison",
-  visual: "visual-comparison",
+  language: "module-language",
+  brokenLinks: "module-broken-links",
+  headings: "module-headings",
   hTagHierarchy: "h-tag-hierarchy",
   textStyle: "text-style-match",
   pageSpeed: "page-speed-match",
-  brokenLinks: "all-issues",
-  headings: "all-issues",
-  content: "all-issues",
-  images: "all-issues",
-  language: "all-issues"
+  content: "module-content",
+  images: "module-images",
+  visual: "visual-comparison"
 };
+
+export const MODULE_SUMMARY_ANCHORS: Record<string, string> = {
+  metadata: "metadata-summary",
+  brokenLinks: "broken-links-summary",
+  language: "summary-module-language",
+  headings: "summary-module-headings",
+  hTagHierarchy: "summary-module-hTagHierarchy",
+  textStyle: "summary-module-textStyle",
+  pageSpeed: "summary-module-pageSpeed",
+  content: "summary-module-content",
+  images: "summary-module-images",
+  visual: "summary-module-visual"
+};
+
+export function getModulePageAnchor(moduleId: string): string {
+  return MODULE_PAGE_ANCHORS[moduleId] || `module-${moduleId}`;
+}
+
+export function getModuleSummaryAnchor(moduleId: string): string {
+  return MODULE_SUMMARY_ANCHORS[moduleId] || `summary-module-${moduleId}`;
+}
 
 export function computeModulePassPercent(moduleId: string, result: CategoryResult): number | null {
   if (result.status === "SKIPPED") return null;
@@ -116,8 +137,41 @@ function renderScoreRing(percent: number | null, label: string): string {
 }
 
 function isReportModuleEnabled(report: PageReport, moduleId: string): boolean {
-  if (!report.enabledModules?.length) return true;
-  return report.enabledModules.includes(moduleId);
+  return getReportEnabledModuleIds(report).includes(moduleId);
+}
+
+export function getReportEnabledModuleIds(report: PageReport): string[] {
+  if (report.enabledModules?.length) {
+    return normalizeEnabledModuleIds(report.enabledModules).filter((moduleId) =>
+      Boolean(report.categories[moduleId])
+    );
+  }
+
+  return COMPARISON_MODULES.map((module) => module.id).filter((moduleId) => {
+    const result = report.categories[moduleId];
+    return Boolean(result && result.status !== "SKIPPED");
+  });
+}
+
+export function getSummaryEnabledModuleIds(results: PageReport[]): string[] {
+  const fromRun = results.find((report) => report.enabledModules?.length)?.enabledModules;
+  if (fromRun?.length) {
+    return normalizeEnabledModuleIds(fromRun);
+  }
+
+  const ids = new Set<string>();
+  for (const report of results) {
+    for (const moduleId of getReportEnabledModuleIds(report)) {
+      ids.add(moduleId);
+    }
+  }
+
+  return COMPARISON_MODULES.map((module) => module.id).filter((moduleId) => ids.has(moduleId));
+}
+
+function getActiveComparisonModules(report: PageReport) {
+  const enabledIds = new Set(getReportEnabledModuleIds(report));
+  return COMPARISON_MODULES.filter((module) => enabledIds.has(module.id));
 }
 
 export const moduleScoreCardsCss = `
@@ -243,21 +297,16 @@ export const moduleScoreCardsCss = `
 `;
 
 export function renderModuleScoreCards(report: PageReport): string {
-  const cards = COMPARISON_MODULES.filter((module) => {
-    if (!isReportModuleEnabled(report, module.id)) return false;
-    return Boolean(report.categories[module.id]);
-  }).map((module) => {
+  const cards = getActiveComparisonModules(report).map((module) => {
     const result = report.categories[module.id]!;
     const percent = computeModulePassPercent(module.id, result);
-    const anchor = MODULE_ANCHORS[module.id];
-    const tag = anchor ? "a" : "div";
-    const href = anchor ? ` href="#${escapeReportHtml(anchor)}"` : "";
+    const anchor = getModulePageAnchor(module.id);
 
-    return `<${tag} class="module-score-card"${href}>
+    return `<a class="module-score-card" href="#${escapeReportHtml(anchor)}">
       ${renderScoreRing(percent, module.label)}
       <span class="module-score-label">${escapeReportHtml(module.label)}</span>
       <span class="pill ${statusClass(result.status)}">${escapeReportHtml(result.status)}</span>
-    </${tag}>`;
+    </a>`;
   });
 
   if (!cards.length) {
@@ -281,7 +330,8 @@ function aggregateModuleStatus(statuses: Status[]): Status {
 }
 
 export function renderSummaryModuleScoreCards(results: PageReport[]): string {
-  const cards = COMPARISON_MODULES.map((module) => {
+  const enabledModuleIds = new Set(getSummaryEnabledModuleIds(results));
+  const cards = COMPARISON_MODULES.filter((module) => enabledModuleIds.has(module.id)).map((module) => {
     const samples = results
       .filter((report) => report.categories[module.id] && isReportModuleEnabled(report, module.id))
       .map((report) => ({
@@ -296,7 +346,7 @@ export function renderSummaryModuleScoreCards(results: PageReport[]): string {
       ? Math.round(percents.reduce((sum, value) => sum + value, 0) / percents.length)
       : null;
     const status = aggregateModuleStatus(samples.map((sample) => sample.result.status));
-    const anchor = module.id === "metadata" ? "metadata-summary" : module.id === "brokenLinks" ? "broken-links-summary" : "results-table";
+    const anchor = getModuleSummaryAnchor(module.id);
     const pageLabel = `${samples.length} page${samples.length === 1 ? "" : "s"}`;
 
     return `<a class="module-score-card" href="#${escapeReportHtml(anchor)}">

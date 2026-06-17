@@ -599,6 +599,10 @@
       margin-bottom: 0;
     }
 
+    .single-url-preview {
+      margin: 10px 0 0;
+    }
+
     #settings-message {
       margin-bottom: 16px;
     }
@@ -777,8 +781,15 @@
               type="text"
               class="text-field"
               placeholder="/artificial-intelligence/"
+              autocomplete="off"
             >
-            <p class="hint">Enter a path like <code>/</code> or <code>/artificial-intelligence/</code>. Live and Migration URLs are built from Settings. The comparison may take 30–90 seconds.</p>
+            <dl class="url-preview single-url-preview">
+              <dt>Resolved live page</dt>
+              <dd id="single-live-preview">—</dd>
+              <dt>Resolved migration page</dt>
+              <dd id="single-migration-preview">—</dd>
+            </dl>
+            <p class="hint">Enter a path like <code>/</code> or <code>/artificial-intelligence/</code>, or paste a full page URL — the path is extracted automatically. The comparison may take 30–90 seconds.</p>
           </div>
 
           <div id="source-upload" class="source-panel hidden">
@@ -973,6 +984,8 @@
     const migrationPasswordInput = document.getElementById("migrationPassword");
     const livePreviewEl = document.getElementById("live-preview");
     const migrationPreviewEl = document.getElementById("migration-preview");
+    const singleLivePreviewEl = document.getElementById("single-live-preview");
+    const singleMigrationPreviewEl = document.getElementById("single-migration-preview");
     const settingsMessage = document.getElementById("settings-message");
     const previewBtn = document.getElementById("preview-btn");
     const runBtn = document.getElementById("run-btn");
@@ -1301,14 +1314,51 @@
 
     function joinBaseUrl(base, alias) {
       const trimmed = String(base || "").trim().replace(/\/+$/, "");
+      if (!trimmed) return "—";
       const path = alias.startsWith("/") ? alias : `/${alias}`;
       return `${trimmed}${path}`;
     }
 
+    function normalizePageAlias(value) {
+      const trimmed = String(value || "").trim();
+      if (!trimmed) return "";
+
+      if (/^https?:\/\//i.test(trimmed)) {
+        try {
+          const pathname = new URL(trimmed).pathname || "/";
+          return pathname.replace(/\/{2,}/g, "/") || "/";
+        } catch {
+          return trimmed;
+        }
+      }
+
+      const withoutHost = trimmed.replace(/^https?:\/\/[^/]+/i, "");
+      const normalized = withoutHost.startsWith("/") ? withoutHost : `/${withoutHost}`;
+      return normalized.replace(/\/{2,}/g, "/") || "/";
+    }
+
+    function updateSingleUrlPreviews() {
+      const alias = normalizePageAlias(pageAliasInput.value);
+      const liveBase = liveBaseUrlInput.value.trim();
+      const migrationBase = migrationBaseUrlInput.value.trim();
+      singleLivePreviewEl.textContent = alias && liveBase ? joinBaseUrl(liveBase, alias) : "—";
+      singleMigrationPreviewEl.textContent = alias && migrationBase ? joinBaseUrl(migrationBase, alias) : "—";
+    }
+
     function updateUrlPreviews() {
-      const alias = "/artificial-intelligence/";
+      const alias = normalizePageAlias(pageAliasInput.value) || "/artificial-intelligence/";
       livePreviewEl.textContent = joinBaseUrl(liveBaseUrlInput.value, alias);
       migrationPreviewEl.textContent = joinBaseUrl(migrationBaseUrlInput.value, alias);
+      updateSingleUrlPreviews();
+    }
+
+    function assertRunSettings() {
+      if (!liveBaseUrlInput.value.trim() || !migrationBaseUrlInput.value.trim()) {
+        throw new Error("Set Live URL and Migration URL in Settings before running.");
+      }
+      if (!migrationPasswordInput.value.trim()) {
+        throw new Error("Set the Migration password in Settings before running.");
+      }
     }
 
     function clearRunResults() {
@@ -1438,6 +1488,8 @@
 
     liveBaseUrlInput.addEventListener("input", updateUrlPreviews);
     migrationBaseUrlInput.addEventListener("input", updateUrlPreviews);
+    pageAliasInput.addEventListener("input", updateUrlPreviews);
+    pageAliasInput.addEventListener("change", updateUrlPreviews);
 
     function appendSettingsFields(requestData) {
       requestData.set("liveBaseUrl", liveBaseUrlInput.value.trim());
@@ -1465,8 +1517,12 @@
     }
 
     function setAllModules(checked) {
-      moduleGrid.querySelectorAll('input[name="enabledModules"]').forEach((input) => {
-        input.checked = checked;
+      const inputs = [...moduleGrid.querySelectorAll('input[name="enabledModules"]')];
+      if (!inputs.length) return;
+      if (!checked && inputs.length === 1) return;
+
+      inputs.forEach((input, index) => {
+        input.checked = checked || index === 0;
       });
       saveModuleSelection();
       updateModuleLoadBar();
@@ -1540,11 +1596,8 @@
     modulesNoneBtn.addEventListener("click", () => setAllModules(false));
 
     function buildRequestFormData() {
-      const data = new FormData(form);
+      assertRunSettings();
       const requestData = new FormData();
-
-      const maxPages = data.get("maxPages");
-      if (maxPages) requestData.set("maxPages", String(maxPages));
 
       requestData.set("headless", document.getElementById("headless").checked ? "true" : "false");
       appendSettingsFields(requestData);
@@ -1554,8 +1607,10 @@
         const file = spreadsheetFileInput.files?.[0];
         if (!file) throw new Error("Choose an Excel file to upload.");
         requestData.set("spreadsheet", file, file.name);
+        const maxPages = document.getElementById("maxPages").value;
+        if (maxPages) requestData.set("maxPages", String(maxPages));
       } else {
-        const pageAlias = String(pageAliasInput.value || "").trim();
+        const pageAlias = normalizePageAlias(pageAliasInput.value);
         if (!pageAlias) throw new Error("Enter a page path or alias.");
         requestData.set("pageAlias", pageAlias);
       }
@@ -1832,6 +1887,7 @@
     }
 
     setSource("single");
+    renderModuleOptions(DEFAULT_MODULES);
     void loadSettings();
     void loadModules();
     void loadRecentRuns();

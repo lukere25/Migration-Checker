@@ -197,6 +197,20 @@ export const pageReportDashboardCss = `
     background: var(--panel);
     box-shadow: var(--shadow);
     overflow: hidden;
+    scroll-margin-top: 80px;
+    transition: box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+
+  .report-accordion.module-scroll-target,
+  .summary-section.module-scroll-target,
+  .summary-results-panel th.module-scroll-target {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow);
+  }
+
+  .summary-section,
+  .summary-results-panel th[id] {
+    scroll-margin-top: 80px;
   }
 
   .accordion-summary {
@@ -363,13 +377,66 @@ export const pageReportDashboardScript = `
     const saved = (function () {
       try { return localStorage.getItem(storageKey); } catch (_) { return null; }
     })();
-  applyTheme(saved === "light" || saved === "dark" ? saved : "dark");
+    applyTheme(saved === "light" || saved === "dark" ? saved : "dark");
 
     if (toggle) {
       toggle.addEventListener("click", function () {
         const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
         applyTheme(next);
       });
+    }
+
+    function scrollOffset() {
+      const topbar = document.querySelector(".report-topbar");
+      return topbar ? topbar.getBoundingClientRect().height + 16 : 16;
+    }
+
+    function highlightTarget(target) {
+      document.querySelectorAll(".module-scroll-target").forEach(function (node) {
+        node.classList.remove("module-scroll-target");
+      });
+      target.classList.add("module-scroll-target");
+      window.setTimeout(function () {
+        target.classList.remove("module-scroll-target");
+      }, 1800);
+    }
+
+    function scrollToModuleTarget(target) {
+      if (!target) return;
+      if (target.tagName === "DETAILS") {
+        target.open = true;
+      }
+      const top = target.getBoundingClientRect().top + window.scrollY - scrollOffset();
+      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      highlightTarget(target);
+    }
+
+    function navigateToHash(hash, replaceHistory) {
+      if (!hash || hash === "#") return;
+      const target = document.querySelector(hash);
+      if (!target) return;
+      scrollToModuleTarget(target);
+      if (replaceHistory) {
+        history.replaceState(null, "", hash);
+      } else {
+        history.pushState(null, "", hash);
+      }
+    }
+
+    document.querySelectorAll('.module-score-card[href^="#"]').forEach(function (card) {
+      card.addEventListener("click", function (event) {
+        const hash = card.getAttribute("href");
+        const target = hash ? document.querySelector(hash) : null;
+        if (!target) return;
+        event.preventDefault();
+        navigateToHash(hash, false);
+      });
+    });
+
+    if (location.hash) {
+      window.setTimeout(function () {
+        navigateToHash(location.hash, true);
+      }, 120);
     }
   })();
 `;

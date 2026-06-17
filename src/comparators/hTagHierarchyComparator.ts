@@ -42,26 +42,48 @@ export function compareHTagHierarchy(prod: Heading[], dev: Heading[]): CategoryR
     });
   }
 
+  const prodMismatchIndexes = new Set<number>();
+  const devMismatchIndexes = new Set<number>();
+  const prodSkipIndexes = new Set<number>();
+  const devSkipIndexes = new Set<number>();
+
+  let previousProd = 0;
+  for (const heading of prod) {
+    if (previousProd && heading.level > previousProd + 1) {
+      prodSkipIndexes.add(heading.index);
+    }
+    previousProd = heading.level;
+  }
+
+  let previousDev = 0;
+  for (const heading of dev) {
+    if (previousDev && heading.level > previousDev + 1) {
+      devSkipIndexes.add(heading.index);
+    }
+    previousDev = heading.level;
+  }
+
   const count = Math.min(prodLevels.length, devLevels.length);
   for (let index = 0; index < count; index += 1) {
     if (prodLevels[index] !== devLevels[index]) {
-      issues.push({
-        severity: "FAIL",
-        category: "H tag hierarchy",
-        source: "comparison",
-        message: `Heading level differs at position ${index + 1}`,
-        prodValue: `h${prodLevels[index]} ${prod[index].text}`,
-        devValue: `h${devLevels[index]} ${dev[index].text}`
-      });
+      prodMismatchIndexes.add(prod[index].index);
+      devMismatchIndexes.add(dev[index].index);
     }
   }
+
+  const prodIssueIndexes = new Set([...prodMismatchIndexes, ...prodSkipIndexes]);
+  const devIssueIndexes = new Set([...devMismatchIndexes, ...devSkipIndexes]);
 
   const result = statusFromIssues(issues, "H tag hierarchy matches");
   return {
     ...result,
     details: {
+      prod,
+      dev,
       prodSequence: prodLevels.map((level) => `h${level}`),
-      devSequence: devLevels.map((level) => `h${level}`)
+      devSequence: devLevels.map((level) => `h${level}`),
+      prodIssueIndexes: [...prodIssueIndexes],
+      devIssueIndexes: [...devIssueIndexes]
     }
   };
 }

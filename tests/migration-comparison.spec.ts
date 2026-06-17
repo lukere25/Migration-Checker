@@ -15,8 +15,7 @@ import { config } from "../src/config";
 import {
   isModuleEnabled,
   normalizeEnabledModuleIds,
-  parseEnabledModulesInput,
-  skippedCategoryResult
+  parseEnabledModulesInput
 } from "../src/comparisonModules";
 import { compareContent } from "../src/comparators/contentComparator";
 import { compareHeadings } from "../src/comparators/headingComparator";
@@ -393,61 +392,48 @@ for (const [index, mapping] of pageMappings.entries()) {
         loadAndExtract(devPage, mapping.devUrl, "dev")
       ]);
 
-      const metadata = moduleEnabled("metadata")
-        ? compareMetadata(prodData.metadata, devData.metadata)
-        : skippedCategoryResult("Metadata");
-      const headings = moduleEnabled("headings")
-        ? compareHeadings(prodData.headings, devData.headings)
-        : skippedCategoryResult("Headings");
-      const hTagHierarchy = moduleEnabled("hTagHierarchy")
-        ? compareHTagHierarchy(prodData.headings, devData.headings)
-        : skippedCategoryResult("H tag hierarchy");
-      const textStyle = moduleEnabled("textStyle")
-        ? compareTextStyles(prodData.textStyles, devData.textStyles)
-        : skippedCategoryResult("Text style");
-      const pageSpeed = moduleEnabled("pageSpeed")
-        ? comparePageSpeed(prodData.pageSpeed, devData.pageSpeed)
-        : skippedCategoryResult("Page speed");
-      const content = moduleEnabled("content")
-        ? compareContent(prodData.content, devData.content)
-        : skippedCategoryResult("Content");
-      const images = moduleEnabled("images")
-        ? compareImages(prodData.images, devData.images)
-        : skippedCategoryResult("Images");
-      const brokenLinkIssues = moduleEnabled("brokenLinks")
-        ? (await Promise.all([
+      const categories: Record<string, CategoryResult> = {};
+
+      if (moduleEnabled("metadata")) {
+        categories.metadata = compareMetadata(prodData.metadata, devData.metadata);
+      }
+      if (moduleEnabled("headings")) {
+        categories.headings = compareHeadings(prodData.headings, devData.headings);
+      }
+      if (moduleEnabled("hTagHierarchy")) {
+        categories.hTagHierarchy = compareHTagHierarchy(prodData.headings, devData.headings);
+      }
+      if (moduleEnabled("textStyle")) {
+        categories.textStyle = compareTextStyles(prodData.textStyles, devData.textStyles);
+      }
+      if (moduleEnabled("pageSpeed")) {
+        categories.pageSpeed = comparePageSpeed(prodData.pageSpeed, devData.pageSpeed);
+      }
+      if (moduleEnabled("content")) {
+        categories.content = compareContent(prodData.content, devData.content);
+      }
+      if (moduleEnabled("images")) {
+        categories.images = compareImages(prodData.images, devData.images);
+      }
+      if (moduleEnabled("brokenLinks")) {
+        const brokenLinkIssues = (
+          await Promise.all([
             checkBrokenLinks(prodData.links, prodContext.request, "prod", config.prodBaseUrl),
             checkBrokenLinks(devData.links, devContext.request, "dev", config.devBaseUrl)
-          ])).flat()
-        : [];
-      const brokenLinks = moduleEnabled("brokenLinks")
-        ? categoryFromIssues("Broken links", brokenLinkIssues)
-        : skippedCategoryResult("Broken links");
-      const language = moduleEnabled("language")
-        ? compareLanguage(prodData.language, devData.language)
-        : skippedCategoryResult("Language");
-
-      let visual: CategoryResult = skippedCategoryResult("Visual comparison");
+          ])
+        ).flat();
+        categories.brokenLinks = categoryFromIssues("Broken links", brokenLinkIssues);
+      }
+      if (moduleEnabled("language")) {
+        categories.language = compareLanguage(prodData.language, devData.language);
+      }
       if (moduleEnabled("visual")) {
         await Promise.all([
           captureFullPageScreenshot(prodPage, prodScreenshot),
           captureFullPageScreenshot(devPage, devScreenshot)
         ]);
-        visual = await compareScreenshots(prodScreenshot, devScreenshot, diffScreenshot);
+        categories.visual = await compareScreenshots(prodScreenshot, devScreenshot, diffScreenshot);
       }
-
-      const categories: Record<string, CategoryResult> = {
-        metadata,
-        brokenLinks,
-        headings,
-        hTagHierarchy,
-        textStyle,
-        pageSpeed,
-        content,
-        images,
-        language,
-        visual
-      };
 
       const allIssues = Object.values(categories).flatMap((category) => category.issues);
       const blockingIssues = allIssues.filter((issue) => issue.severity === "FAIL");

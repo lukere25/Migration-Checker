@@ -7,11 +7,17 @@ import { PageReport, SummaryReport } from "./reportTypes";
 import { buildBrokenLinksSummary, buildMetadataSummary } from "./reportSummaries";
 import { allMetaComparisonComponentCss, renderAllMetaTagsComparisonBody } from "./allMetaComparisonComponent";
 import {
+  headingTreeCss,
+  renderBrokenLinksBody,
+  renderContentBody,
+  renderHeadingsBody,
   renderHTagHierarchyBody,
+  renderImagesBody,
+  renderLanguageBody,
   renderPageSpeedBody,
   renderTextStyleBody
 } from "./moduleReportPanels";
-import { moduleScoreCardsCss, renderModuleScoreCards, renderSummaryModuleScoreCards } from "./moduleScoreCards";
+import { moduleScoreCardsCss, renderModuleScoreCards, renderSummaryModuleScoreCards, getReportEnabledModuleIds, getSummaryEnabledModuleIds, getModulePageAnchor } from "./moduleScoreCards";
 import {
   escapeReportHtml,
   pageReportDashboardCss,
@@ -164,6 +170,7 @@ const summaryReportCss = `
 const pageReportCss = `
   ${pageReportDashboardCss}
   ${moduleScoreCardsCss}
+  ${headingTreeCss}
   ${allMetaComparisonComponentCss}
   .screens-compare {
     border: 1px solid var(--border);
@@ -323,8 +330,7 @@ function renderVisualComparisonBody(report: PageReport): string {
 }
 
 function isReportModuleEnabled(report: PageReport, moduleId: string): boolean {
-  if (!report.enabledModules?.length) return true;
-  return report.enabledModules.includes(moduleId);
+  return getReportEnabledModuleIds(report).includes(moduleId);
 }
 
 function renderIssuesBody(report: PageReport): string {
@@ -346,76 +352,145 @@ function renderReportDownloadBar(report: PageReport): string {
 function renderPageAccordions(report: PageReport): string {
   const parts: string[] = [];
 
-  if (isReportModuleEnabled(report, "metadata")) {
-    parts.push(
-      renderAccordion({
-        id: "all-meta-tags-comparison",
-        title: "Metadata",
-        subtitle: "Live vs migration meta tags",
-        status: report.categories.metadata?.status || "PASS",
-        open: true,
-        body: renderAllMetaTagsComparisonBody(report)
-      })
-    );
-  }
+  for (const module of COMPARISON_MODULES) {
+    if (!isReportModuleEnabled(report, module.id) || !report.categories[module.id]) {
+      continue;
+    }
 
-  if (isReportModuleEnabled(report, "hTagHierarchy")) {
-    parts.push(
-      renderAccordion({
-        id: "h-tag-hierarchy",
-        title: "H tag hierarchy",
-        subtitle: "Heading order and skipped levels",
-        status: report.categories.hTagHierarchy?.status || "PASS",
-        open: false,
-        body: renderHTagHierarchyBody(report)
-      })
-    );
-  }
+    const status = report.categories[module.id]?.status || "PASS";
+    const anchor = getModulePageAnchor(module.id);
 
-  if (isReportModuleEnabled(report, "textStyle")) {
-    parts.push(
-      renderAccordion({
-        id: "text-style-match",
-        title: "Text style match",
-        subtitle: "Computed typography comparison",
-        status: report.categories.textStyle?.status || "PASS",
-        open: false,
-        body: renderTextStyleBody(report)
-      })
-    );
-  }
-
-  if (isReportModuleEnabled(report, "pageSpeed")) {
-    parts.push(
-      renderAccordion({
-        id: "page-speed-match",
-        title: "Page speed match",
-        subtitle: "Load timing comparison",
-        status: report.categories.pageSpeed?.status || "PASS",
-        open: false,
-        body: renderPageSpeedBody(report)
-      })
-    );
-  }
-
-  if (isReportModuleEnabled(report, "visual")) {
-    parts.push(
-      renderAccordion({
-        id: "visual-comparison",
-        title: "Visual comparison",
-        subtitle: "Production, migration, and pixel diff",
-        status: report.categories.visual?.status || "PASS",
-        open: true,
-        body: renderVisualComparisonBody(report)
-      })
-    );
+    switch (module.id) {
+      case "metadata":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Metadata",
+            subtitle: "Live vs migration meta tags",
+            status,
+            open: true,
+            body: renderAllMetaTagsComparisonBody(report)
+          })
+        );
+        break;
+      case "language":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Language",
+            subtitle: "html lang, hreflang, and placeholders",
+            status,
+            open: false,
+            body: renderLanguageBody(report)
+          })
+        );
+        break;
+      case "brokenLinks":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Broken links",
+            subtitle: "HTTP status on internal links",
+            status,
+            open: false,
+            body: renderBrokenLinksBody(report)
+          })
+        );
+        break;
+      case "headings":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Headings",
+            subtitle: "Heading text and level comparison",
+            status,
+            open: false,
+            body: renderHeadingsBody(report)
+          })
+        );
+        break;
+      case "hTagHierarchy":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "H tag hierarchy",
+            subtitle: "Heading order and skipped levels",
+            status,
+            open: false,
+            body: renderHTagHierarchyBody(report)
+          })
+        );
+        break;
+      case "textStyle":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Text style match",
+            subtitle: "Computed typography comparison",
+            status,
+            open: false,
+            body: renderTextStyleBody(report)
+          })
+        );
+        break;
+      case "pageSpeed":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Page speed match",
+            subtitle: "Load timing comparison",
+            status,
+            open: false,
+            body: renderPageSpeedBody(report)
+          })
+        );
+        break;
+      case "content":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Content",
+            subtitle: "Body text similarity and length",
+            status,
+            open: false,
+            body: renderContentBody(report)
+          })
+        );
+        break;
+      case "images":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Images",
+            subtitle: "Image sources and alt text",
+            status,
+            open: false,
+            body: renderImagesBody(report)
+          })
+        );
+        break;
+      case "visual":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Visual comparison",
+            subtitle: "Production, migration, and pixel diff",
+            status,
+            open: true,
+            body: renderVisualComparisonBody(report)
+          })
+        );
+        break;
+      default:
+        break;
+    }
   }
 
   if (report.issues.length) {
     parts.push(
       renderAccordion({
         id: "all-issues",
-        title: "Issues",
+        title: "All issues",
         subtitle: `${report.issues.length} issue(s) recorded`,
         status: report.blockingIssues.length ? "FAIL" : report.warnings.length ? "WARNING" : "PASS",
         open: false,
@@ -484,7 +559,11 @@ function renderSummaryStatCards(summary: SummaryReport): string {
 }
 
 export async function writeSummaryHtml(summary: SummaryReport): Promise<void> {
-  const moduleHeaders = COMPARISON_MODULES.map((module) => `<th>${escapeReportHtml(module.label)}</th>`).join("");
+  const enabledModuleIds = getSummaryEnabledModuleIds(summary.results);
+  const enabledModules = COMPARISON_MODULES.filter((module) => enabledModuleIds.includes(module.id));
+  const moduleHeaders = enabledModules
+    .map((module) => `<th id="summary-module-${escapeReportHtml(module.id)}">${escapeReportHtml(module.label)}</th>`)
+    .join("");
 
   const rows = summary.results
     .map((report) => {
@@ -492,10 +571,12 @@ export async function writeSummaryHtml(summary: SummaryReport): Promise<void> {
       const pdfLink = report.reportPaths.pdf
         ? path.relative(config.reportsDir, report.reportPaths.pdf).replace(/\\/g, "/")
         : reportLink.replace(/index\.html$/, "index.pdf");
-      const moduleCells = COMPARISON_MODULES.map((module) => {
-        const status = report.categories[module.id]?.status;
-        return `<td>${status ? categoryStatusPill(status) : "—"}</td>`;
-      }).join("");
+      const moduleCells = enabledModules
+        .map((module) => {
+          const status = report.categories[module.id]?.status;
+          return `<td>${status ? categoryStatusPill(status) : "—"}</td>`;
+        })
+        .join("");
 
       return `<tr data-status="${report.overallStatus}">
         <td>${escapeReportHtml(report.pageName)}</td>

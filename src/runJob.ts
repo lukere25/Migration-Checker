@@ -41,11 +41,18 @@ export interface RunJob {
   finishedAt?: string;
   exitCode?: number;
   error?: string;
+  /** True once the Playwright test process has been spawned for this job. */
+  playwrightLaunched?: boolean;
 }
 
 const jobs = new Map<string, RunJob>();
 let activeJobId: string | null = null;
 let activePlaywrightProcess: ChildProcessWithoutNullStreams | null = null;
+const executingJobs = new Set<string>();
+
+function isJobExecuting(job: RunJob): boolean {
+  return executingJobs.has(job.id);
+}
 
 const inProgressStatuses: RunStatus[] = ["queued", "downloading", "authenticating", "running"];
 
@@ -69,6 +76,10 @@ function recoverStaleActiveJob(): void {
   }
 
   if (job.status === "running" && !isPlaywrightProcessRunning()) {
+    if (isJobExecuting(job)) {
+      return;
+    }
+
     if (hasSummaryResultsSync(job.reportsDir)) {
       job.status = "completed";
       job.finishedAt = new Date().toISOString();
@@ -177,6 +188,10 @@ async function maybeFinalizeJob(job: RunJob): Promise<void> {
   }
 
   if (job.status === "running" && !playwrightRunning) {
+    if (isJobExecuting(job)) {
+      return;
+    }
+
     if (hasSummaryResultsSync(job.reportsDir)) {
       job.status = "completed";
       job.finishedAt = new Date().toISOString();
@@ -423,6 +438,7 @@ async function executeJob(
   job: RunJob,
   sources: { spreadsheetUrl?: string; pageAlias?: string }
 ): Promise<void> {
+  executingJobs.add(job.id);
   try {
     await prepareSpreadsheet(job, sources);
 
@@ -457,13 +473,13 @@ async function executeJob(
     appendLog(job, "Migration authentication ready");
 
     await fs.ensureDir(job.reportsDir);
-    job.status = "running";
     appendLog(job, "Preparing Playwright browsers...");
     await ensurePlaywrightBrowsers(job);
     job.pagesCompleted = 0;
     job.activePage = 0;
     job.progressFilePath = path.join(job.reportsDir, ".run-progress.json");
     await fs.remove(job.progressFilePath).catch(() => undefined);
+    job.status = "running";
     appendLog(job, "Launching browsers and comparing pages...");
 
     const exitCode = await runPlaywright(job);
@@ -500,6 +516,7 @@ async function executeJob(
     appendLog(job, `Error: ${job.error}`);
     logger.error(job.error);
   } finally {
+    executingJobs.delete(job.id);
     if (activeJobId === job.id) {
       activeJobId = null;
     }
@@ -663,6 +680,7 @@ function runPlaywright(job: RunJob): Promise<number> {
       shell: process.platform === "win32"
     });
 
+    job.playwrightLaunched = true;
     activePlaywrightProcess = child;
 
     child.on("close", () => {
