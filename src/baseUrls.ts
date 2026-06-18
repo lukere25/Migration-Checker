@@ -3,7 +3,7 @@ import path from "path";
 import { config } from "./config";
 import { clearDevAuthStorage } from "./auth";
 import { DEFAULT_ENABLED_MODULE_IDS, normalizeEnabledModuleIds } from "./comparisonModules";
-import { JiraSettings, normalizeAtlassianDomain, normalizeJiraIssueTypeId, normalizeJiraProjectId } from "./jira";
+import { JiraSettings, normalizeAtlassianDomain, normalizeJiraProjectId } from "./jira";
 
 const settingsPath = path.join(process.cwd(), ".runs", "settings.json");
 
@@ -59,20 +59,17 @@ export function applyEnabledModules(ids: string[] | undefined): string[] {
 export function getJiraSettings(): JiraSettings {
   return {
     atlassianDomain: config.jiraAtlassianDomain,
-    projectId: config.jiraProjectId,
-    issueTypeId: config.jiraIssueTypeId
+    projectId: config.jiraProjectId
   };
 }
 
-export function applyJiraSettings(settings: Partial<JiraSettings>): JiraSettings {
+export function applyJiraSettings(settings: Partial<JiraSettings & { issueTypeId?: string }>): JiraSettings {
   const normalized = {
     atlassianDomain: normalizeAtlassianDomain(settings.atlassianDomain || ""),
-    projectId: normalizeJiraProjectId(settings.projectId || ""),
-    issueTypeId: normalizeJiraIssueTypeId(settings.issueTypeId || "")
+    projectId: normalizeJiraProjectId(settings.projectId || "")
   };
   config.jiraAtlassianDomain = normalized.atlassianDomain;
   config.jiraProjectId = normalized.projectId;
-  config.jiraIssueTypeId = normalized.issueTypeId;
   return normalized;
 }
 
@@ -114,8 +111,7 @@ export async function loadPersistedSettings(): Promise<void> {
     ) {
       applyJiraSettings({
         atlassianDomain: String(saved.jiraAtlassianDomain || ""),
-        projectId: String(saved.jiraProjectId || ""),
-        issueTypeId: String(saved.jiraIssueTypeId || "")
+        projectId: String(saved.jiraProjectId || "")
       });
     }
     if (Array.isArray(saved?.enabledModules)) {
@@ -148,8 +144,7 @@ export async function saveAppSettings(settings: Partial<AppSettings>): Promise<A
   ) {
     applyJiraSettings({
       atlassianDomain: settings.jiraAtlassianDomain ?? current.jiraAtlassianDomain,
-      projectId: settings.jiraProjectId ?? current.jiraProjectId,
-      issueTypeId: settings.jiraIssueTypeId ?? current.jiraIssueTypeId
+      projectId: settings.jiraProjectId ?? current.jiraProjectId
     });
   }
 

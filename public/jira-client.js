@@ -40,16 +40,19 @@
 
   function buildCreateIssueUrl(settings, payload) {
     var host = normalizeAtlassianDomain(settings.jiraAtlassianDomain || settings.atlassianDomain);
-    var projectId = normalizeProjectId(settings.jiraProjectId || settings.projectId);
-    if (!host || !projectId) {
-      throw new Error("Configure Jira in Settings before creating tasks.");
+    if (!host) {
+      throw new Error("Configure your Jira domain in Settings.");
     }
 
     var params = new URLSearchParams({
-      pid: projectId,
       summary: buildSummary(payload),
       description: buildDescription(payload)
     });
+
+    var projectId = normalizeProjectId(settings.jiraProjectId || settings.projectId);
+    if (projectId) {
+      params.set("pid", projectId);
+    }
 
     return "https://" + host + "/secure/CreateIssueDetails!init.jspa?" + params.toString();
   }

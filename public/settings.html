@@ -283,7 +283,7 @@
   <main>
     <section class="card">
       <h2 class="card-title">Jira</h2>
-      <p class="card-desc">Used by <strong>Create Jira</strong> buttons in report issue tables. Opens a prefilled Jira create-issue form via URL parameters.</p>
+      <p class="card-desc">Used by <strong>Open Jira</strong> buttons in reports. Opens Jira with the issue title and description prefilled — you choose project and issue type in Jira.</p>
 
       <form id="jira-settings-form">
         <label for="jiraProjectUrl">Paste Jira project or board URL (optional)</label>
@@ -292,11 +292,11 @@
           name="jiraProjectUrl"
           type="url"
           class="text-field"
-          placeholder="https://eight25media.atlassian.net/jira/software/c/projects/PAND/boards/"
+          placeholder="https://mycompany.atlassian.net/jira/software/c/projects/PROJ/boards/"
         >
-        <p class="hint">We extract the site domain and project key (e.g. <code>PAND</code>) from URLs like the example above.</p>
+        <p class="hint">We extract the site domain from URLs like the example above.</p>
 
-        <label for="jiraAtlassianDomain">Atlassian domain</label>
+        <label for="jiraAtlassianDomain">Atlassian domain (required)</label>
         <input
           id="jiraAtlassianDomain"
           name="jiraAtlassianDomain"
@@ -304,10 +304,11 @@
           class="text-field"
           placeholder="mycompany or mycompany.atlassian.net"
           autocomplete="off"
+          required
         >
-        <p class="hint">Your Jira Cloud site subdomain, e.g. <code>mycompany</code> for <code>mycompany.atlassian.net</code>.</p>
+        <p class="hint">Your Jira Cloud site, e.g. <code>mycompany</code> for <code>mycompany.atlassian.net</code>.</p>
 
-        <label for="jiraProjectId">Project ID (numeric)</label>
+        <label for="jiraProjectId">Project ID (optional)</label>
         <input
           id="jiraProjectId"
           name="jiraProjectId"
@@ -317,35 +318,17 @@
           inputmode="numeric"
           autocomplete="off"
         >
-        <p class="hint">Numeric <code>pid</code> for create-issue links — <strong>not</strong> the project key (<code>PAND</code>). Use the lookup link below to find it.</p>
-
-        <label for="jiraIssueTypeId">Issue type ID (numeric)</label>
-        <input
-          id="jiraIssueTypeId"
-          name="jiraIssueTypeId"
-          type="text"
-          class="text-field"
-          placeholder="10001"
-          inputmode="numeric"
-          autocomplete="off"
-        >
-        <p class="hint">Numeric <code>issuetype</code> for create-issue links (e.g. Task, Bug). Use the lookup link below after setting the project ID.</p>
+        <p class="hint">Numeric project ID — only if you want Jira to preselect a project. Leave blank to choose in Jira.</p>
 
         <div class="lookup-panel hidden" id="jira-lookup-panel">
           <p class="lookup-title"><strong>Look up numeric project ID</strong></p>
-          <p class="hint">While logged into Jira, open this link and copy the <code>"id"</code> value from the JSON (e.g. <code>"id": "10000"</code>).</p>
+          <p class="hint">While logged into Jira, open this link and copy the <code>"id"</code> value from the JSON.</p>
           <p><a id="jira-lookup-link" href="#" target="_blank" rel="noopener noreferrer">Open project API lookup</a></p>
-        </div>
-
-        <div class="lookup-panel hidden" id="jira-issuetype-lookup-panel">
-          <p class="lookup-title"><strong>Look up issue type ID</strong></p>
-          <p class="hint">While logged into Jira, open this link and find the issue type you want (e.g. Task or Bug). Copy its <code>"id"</code> value (e.g. <code>"id": "10001"</code>).</p>
-          <p><a id="jira-issuetype-lookup-link" href="#" target="_blank" rel="noopener noreferrer">Open issue type API lookup</a></p>
         </div>
 
         <dl class="url-preview">
           <dt>Example create-issue URL</dt>
-          <dd id="jira-url-preview">Configure domain and project ID to preview.</dd>
+          <dd id="jira-url-preview">Configure domain to preview.</dd>
         </dl>
 
         <div class="actions">
@@ -361,13 +344,10 @@
     const projectUrlInput = document.getElementById("jiraProjectUrl");
     const domainInput = document.getElementById("jiraAtlassianDomain");
     const projectInput = document.getElementById("jiraProjectId");
-    const issueTypeInput = document.getElementById("jiraIssueTypeId");
     const previewEl = document.getElementById("jira-url-preview");
     const messageEl = document.getElementById("jira-message");
     const lookupPanel = document.getElementById("jira-lookup-panel");
     const lookupLink = document.getElementById("jira-lookup-link");
-    const issueTypeLookupPanel = document.getElementById("jira-issuetype-lookup-panel");
-    const issueTypeLookupLink = document.getElementById("jira-issuetype-lookup-link");
 
     function normalizeDomain(value) {
       const trimmed = String(value || "").trim();
@@ -411,21 +391,6 @@
       lookupPanel.classList.remove("hidden");
     }
 
-    function updateIssueTypeLookupPanel() {
-      const host = normalizeDomain(domainInput.value);
-      const projectId = normalizeProjectId(projectInput.value);
-
-      if (!host || !projectId) {
-        issueTypeLookupPanel.classList.add("hidden");
-        return;
-      }
-
-      const lookupUrl =
-        "https://" + host + "/rest/api/3/issue/createmeta?projectIds=" + projectId + "&expand=projects.issuetypes";
-      issueTypeLookupLink.href = lookupUrl;
-      issueTypeLookupLink.textContent = lookupUrl;
-      issueTypeLookupPanel.classList.remove("hidden");
-    }
 
     function normalizeProjectId(value) {
       return String(value || "").trim().replace(/\D/g, "");
@@ -434,18 +399,16 @@
     function updatePreview() {
       const host = normalizeDomain(domainInput.value);
       const projectId = normalizeProjectId(projectInput.value);
-      const issueTypeId = normalizeProjectId(issueTypeInput.value);
-      if (!host || !projectId || !issueTypeId) {
-        previewEl.textContent = "Configure domain, project ID, and issue type ID to preview.";
+      if (!host) {
+        previewEl.textContent = "Configure domain to preview.";
         return;
       }
 
       const params = new URLSearchParams({
-        pid: projectId,
-        issuetype: issueTypeId,
         summary: "[Sync Scope] FAIL · Metadata: Example issue",
         description: "Example prefilled issue from Sync Scope."
       });
+      if (projectId) params.set("pid", projectId);
       previewEl.textContent = "https://" + host + "/secure/CreateIssueDetails!init.jspa?" + params.toString();
     }
 
@@ -457,26 +420,19 @@
 
     domainInput.addEventListener("input", () => {
       updateLookupPanel();
-      updateIssueTypeLookupPanel();
       updatePreview();
     });
-    projectInput.addEventListener("input", () => {
-      updateIssueTypeLookupPanel();
-      updatePreview();
-    });
-    issueTypeInput.addEventListener("input", updatePreview);
+    projectInput.addEventListener("input", updatePreview);
     projectUrlInput.addEventListener("input", () => {
       const parsed = parseProjectUrl(projectUrlInput.value);
       if (parsed?.host) domainInput.value = parsed.host;
       updateLookupPanel();
-      updateIssueTypeLookupPanel();
       updatePreview();
     });
     projectUrlInput.addEventListener("change", () => {
       const parsed = parseProjectUrl(projectUrlInput.value);
       if (parsed?.host) domainInput.value = parsed.host;
       updateLookupPanel();
-      updateIssueTypeLookupPanel();
       updatePreview();
     });
 
@@ -487,9 +443,7 @@
         const data = await response.json();
         domainInput.value = data.jiraAtlassianDomain || "";
         projectInput.value = data.jiraProjectId || "";
-        issueTypeInput.value = data.jiraIssueTypeId || "";
         updateLookupPanel();
-        updateIssueTypeLookupPanel();
         updatePreview();
       } catch {
         updatePreview();
@@ -506,8 +460,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             jiraAtlassianDomain: domainInput.value.trim(),
-            jiraProjectId: projectInput.value.trim(),
-            jiraIssueTypeId: issueTypeInput.value.trim()
+            jiraProjectId: projectInput.value.trim()
           })
         });
         const data = await response.json();
@@ -515,9 +468,7 @@
 
         domainInput.value = data.jiraAtlassianDomain || "";
         projectInput.value = data.jiraProjectId || "";
-        issueTypeInput.value = data.jiraIssueTypeId || "";
         updateLookupPanel();
-        updateIssueTypeLookupPanel();
         updatePreview();
         showMessage("Jira settings saved.", "success");
       } catch (error) {

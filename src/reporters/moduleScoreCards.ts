@@ -3,6 +3,7 @@ import { getMetadataCheckItems } from "../comparators/metadataComparator";
 import { getEmbedCheckItems } from "../comparators/embedComparator";
 import { getStackCheckItems } from "../comparators/techStackComparator";
 import { getSchemaCheckItems } from "../comparators/schemaComparator";
+import { getSpacingCheckItems } from "../comparators/spacingComparator";
 import { CategoryResult, Status } from "../utils/status";
 import { PageReport } from "./reportTypes";
 import { escapeReportHtml, statusClass } from "./pageReportLayout";
@@ -12,8 +13,6 @@ export const MODULE_PAGE_ANCHORS: Record<string, string> = {
   schema: "module-schema",
   embeds: "module-embeds",
   devTechnologies: "module-dev-technologies",
-  programmingLanguages: "module-programming-languages",
-  cms: "module-cms",
   serverComparison: "module-server-comparison",
   language: "module-language",
   brokenLinks: "module-broken-links",
@@ -23,6 +22,7 @@ export const MODULE_PAGE_ANCHORS: Record<string, string> = {
   pageSpeed: "page-speed-match",
   content: "module-content",
   images: "module-images",
+  moduleSpacing: "module-spacing",
   visual: "visual-comparison"
 };
 
@@ -31,8 +31,6 @@ export const MODULE_SUMMARY_ANCHORS: Record<string, string> = {
   schema: "summary-module-schema",
   embeds: "summary-module-embeds",
   devTechnologies: "summary-module-devTechnologies",
-  programmingLanguages: "summary-module-programmingLanguages",
-  cms: "summary-module-cms",
   serverComparison: "summary-module-serverComparison",
   brokenLinks: "broken-links-summary",
   language: "summary-module-language",
@@ -42,6 +40,7 @@ export const MODULE_SUMMARY_ANCHORS: Record<string, string> = {
   pageSpeed: "summary-module-pageSpeed",
   content: "summary-module-content",
   images: "summary-module-images",
+  moduleSpacing: "summary-module-moduleSpacing",
   visual: "summary-module-visual"
 };
 
@@ -81,9 +80,15 @@ export function computeModulePassPercent(moduleId: string, result: CategoryResul
       }
       break;
     }
+    case "moduleSpacing": {
+      const items = getSpacingCheckItems(result);
+      if (items.length) {
+        const passed = items.filter((item) => item.status === "PASS").length;
+        return Math.round((passed / items.length) * 100);
+      }
+      break;
+    }
     case "devTechnologies":
-    case "programmingLanguages":
-    case "cms":
     case "serverComparison": {
       const items = getStackCheckItems(result);
       if (items.length) {

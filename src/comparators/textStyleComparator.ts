@@ -12,8 +12,58 @@ const STYLE_FIELDS: Array<keyof TextStyleSample["styles"]> = [
   "textTransform"
 ];
 
+export interface TextStyleFieldRow {
+  field: string;
+  label: string;
+  liveValue: string;
+  migrationValue: string;
+  status: "MATCH" | "DIFFER" | "MISSING_LIVE" | "MISSING_MIGRATION";
+}
+
+export interface TextStyleComparisonRow {
+  key: string;
+  tag: string;
+  liveText: string;
+  migrationText: string;
+  fields: TextStyleFieldRow[];
+}
+
 function labelStyleField(field: keyof TextStyleSample["styles"]): string {
   return field.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
+}
+
+function fieldStatus(liveValue?: string, migrationValue?: string): TextStyleFieldRow["status"] {
+  const live = liveValue ?? "";
+  const migration = migrationValue ?? "";
+  if (!live && migration) return "MISSING_LIVE";
+  if (live && !migration) return "MISSING_MIGRATION";
+  if (live === migration) return "MATCH";
+  return "DIFFER";
+}
+
+function buildComparisonRows(prod: TextStyleSample[], dev: TextStyleSample[]): TextStyleComparisonRow[] {
+  const prodByKey = new Map(prod.map((sample) => [sample.key, sample]));
+  const devByKey = new Map(dev.map((sample) => [sample.key, sample]));
+  const keys = [...new Set([...prodByKey.keys(), ...devByKey.keys()])].sort();
+
+  return keys.map((key) => {
+    const prodSample = prodByKey.get(key);
+    const devSample = devByKey.get(key);
+
+    return {
+      key,
+      tag: prodSample?.tag || devSample?.tag || key,
+      liveText: prodSample?.text || "",
+      migrationText: devSample?.text || "",
+      fields: STYLE_FIELDS.map((field) => ({
+        field,
+        label: labelStyleField(field),
+        liveValue: prodSample?.styles[field] || "",
+        migrationValue: devSample?.styles[field] || "",
+        status: fieldStatus(prodSample?.styles[field], devSample?.styles[field])
+      }))
+    };
+  });
 }
 
 export function compareTextStyles(prod: TextStyleSample[], dev: TextStyleSample[]): CategoryResult {
@@ -78,10 +128,10 @@ export function compareTextStyles(prod: TextStyleSample[], dev: TextStyleSample[
       status: "PASS",
       summary: "Text styles match",
       issues: [],
-      details: { prod, dev }
+      details: { prod, dev, comparisonRows: buildComparisonRows(prod, dev) }
     };
   }
 
   const result = statusFromIssues(issues, "Text styles match");
-  return { ...result, details: { prod, dev } };
+  return { ...result, details: { prod, dev, comparisonRows: buildComparisonRows(prod, dev) } };
 }

@@ -1169,9 +1169,7 @@
       { id: "metadata", label: "Metadata", description: "Meta tags and SEO fields" },
       { id: "schema", label: "Schema", description: "JSON-LD structured data comparison" },
       { id: "embeds", label: "Iframe & embeds", description: "Iframe, embed, and embedded widget comparison" },
-      { id: "devTechnologies", label: "Development technologies", description: "Frameworks, libraries, and front-end stack signals" },
-      { id: "programmingLanguages", label: "Programming languages", description: "Backend language markers and runtime hints" },
-      { id: "cms", label: "CMS", description: "CMS platform and generator detection" },
+      { id: "devTechnologies", label: "Development technologies", description: "Frameworks, libraries, programming languages, and CMS detection" },
       { id: "serverComparison", label: "Server comparison", description: "Server, hosting, and response header comparison" },
       { id: "language", label: "Language", description: "HTML lang attribute" },
       { id: "brokenLinks", label: "Broken links", description: "HTTP status on internal links" },
@@ -1181,6 +1179,7 @@
       { id: "pageSpeed", label: "Page speed match", description: "Load timing vs live site" },
       { id: "content", label: "Content", description: "Body text similarity" },
       { id: "images", label: "Images", description: "Image sources and alt text" },
+      { id: "moduleSpacing", label: "Module spacing", description: "Full-page screenshots with module and gap marks" },
       { id: "visual", label: "Visual comparison", description: "Screenshots and pixel diff" }
     ];
 
@@ -1193,10 +1192,6 @@
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2m0 16H5V5h14zM8 8h8v8H8z"/></svg>',
       devTechnologies:
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6z"/></svg>',
-      programmingLanguages:
-        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 3a2 2 0 0 0-2 2v4h2V5h10v14H8v-4H6v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm1 6v2h8v-2zm0 4v2h5v-2z"/></svg>',
-      cms:
-        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 4h16v2H4zm0 5h10v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>',
       serverComparison:
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 1h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2m0 8h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2m0 8h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2"/></svg>',
       language:
@@ -1215,6 +1210,8 @@
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zm2 16H8v-2h8zm0-4H8v-2h8zm-3-5V3.5L18.5 9z"/></svg>',
       images:
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2M8.5 13.5l2.5 3.01L14.5 12l4.5 6H5z"/></svg>',
+      moduleSpacing:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 8h4V4H4zm6 12h4v-4h-4zm-6 0h4v-4H4zm0-6h4v-4H4zm6 0h4v-4h-4zm6 10h4v-4h-4zm0-6h4v-4h-4z"/></svg>',
       visual:
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5M12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5m0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6"/></svg>',
       default:

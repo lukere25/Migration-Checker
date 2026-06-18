@@ -8,9 +8,7 @@ export const COMPARISON_MODULES: ComparisonModule[] = [
   { id: "metadata", label: "Metadata", description: "Meta tags and SEO fields" },
   { id: "schema", label: "Schema", description: "JSON-LD structured data comparison" },
   { id: "embeds", label: "Iframe & embeds", description: "Iframe, embed, and embedded widget comparison" },
-  { id: "devTechnologies", label: "Development technologies", description: "Frameworks, libraries, and front-end stack signals" },
-  { id: "programmingLanguages", label: "Programming languages", description: "Backend language markers and runtime hints" },
-  { id: "cms", label: "CMS", description: "CMS platform and generator detection" },
+  { id: "devTechnologies", label: "Development technologies", description: "Frameworks, libraries, programming languages, and CMS detection" },
   { id: "serverComparison", label: "Server comparison", description: "Server, hosting, and response header comparison" },
   { id: "language", label: "Language", description: "HTML lang attribute" },
   { id: "brokenLinks", label: "Broken links", description: "HTTP status on internal links" },
@@ -20,6 +18,7 @@ export const COMPARISON_MODULES: ComparisonModule[] = [
   { id: "pageSpeed", label: "Page speed match", description: "Load timing vs live site" },
   { id: "content", label: "Content", description: "Body text similarity" },
   { id: "images", label: "Images", description: "Image sources and alt text" },
+  { id: "moduleSpacing", label: "Module spacing", description: "Full-page screenshots with module and gap marks" },
   { id: "visual", label: "Visual comparison", description: "Screenshots and pixel diff" }
 ];
 
@@ -32,9 +31,21 @@ export function isValidModuleId(id: string): boolean {
 }
 
 export function normalizeEnabledModuleIds(ids: string[] | undefined): string[] {
+  const legacyAliases: Record<string, string> = {
+    programmingLanguages: "devTechnologies",
+    cms: "devTechnologies"
+  };
+
   if (!ids?.length) return [...DEFAULT_ENABLED_MODULE_IDS];
 
-  const normalized = [...new Set(ids.map((id) => id.trim()).filter((id) => isValidModuleId(id)))];
+  const normalized = [
+    ...new Set(
+      ids
+        .map((id) => id.trim())
+        .map((id) => legacyAliases[id] || id)
+        .filter((id) => isValidModuleId(id))
+    )
+  ];
   return normalized.length ? normalized : [...DEFAULT_ENABLED_MODULE_IDS];
 }
 

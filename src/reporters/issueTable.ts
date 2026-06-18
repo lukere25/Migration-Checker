@@ -48,12 +48,12 @@ export function renderIssueJiraLink(issue: Issue, context: IssueTableContext = {
   const settings = getJiraSettings();
 
   if (!isJiraConfigured(settings)) {
-    return `<a class="jira-create-link is-unconfigured no-print" href="/settings.html" title="Configure Jira domain and project ID in Settings">Configure Jira</a>`;
+    return `<a class="jira-create-link is-unconfigured no-print" href="/settings.html" title="Configure your Jira site domain in Settings">Configure Jira</a>`;
   }
 
   try {
     const href = escapeReportHtml(buildJiraCreateIssueUrl(settings, toJiraPayload(issue, context)));
-    return `<a class="jira-create-link no-print" href="${href}" target="_blank" rel="noopener noreferrer" title="Open prefilled Jira create-issue form">Create Jira issue</a>`;
+    return `<a class="jira-create-link no-print" href="${href}" target="_blank" rel="noopener noreferrer" title="Open Jira with title and description prefilled">Open Jira</a>`;
   } catch {
     return `<a class="jira-create-link is-unconfigured no-print" href="/settings.html">Configure Jira</a>`;
   }

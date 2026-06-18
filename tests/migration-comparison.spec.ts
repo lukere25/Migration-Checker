@@ -28,12 +28,11 @@ import { compareLanguage } from "../src/comparators/navigationComparator";
 import { comparePageSpeed } from "../src/comparators/pageSpeedComparator";
 import { compareEmbeds } from "../src/comparators/embedComparator";
 import {
-  compareCms,
   compareDevTechnologies,
-  compareProgrammingLanguages,
   compareServerStack
 } from "../src/comparators/techStackComparator";
 import { compareSchema } from "../src/comparators/schemaComparator";
+import { compareModuleSpacing } from "../src/comparators/spacingComparator";
 import { compareTextStyles } from "../src/comparators/textStyleComparator";
 import { compareScreenshots } from "../src/comparators/visualComparator";
 import { extractContent } from "../src/extractors/contentExtractor";
@@ -46,6 +45,7 @@ import { extractPageSpeed } from "../src/extractors/pageSpeedExtractor";
 import { extractEmbeds, emptyEmbedData } from "../src/extractors/embedExtractor";
 import { extractTechStack, emptyTechStackData } from "../src/extractors/techStackExtractor";
 import { extractSchema, emptySchemaData } from "../src/extractors/schemaExtractor";
+import { ModuleSpacingData } from "../src/extractors/spacingExtractor";
 import { extractTextStyles } from "../src/extractors/textStyleExtractor";
 import { readPageMappingsFromFile, resolveSpreadsheetPath } from "../src/readExcel";
 import { resolveReportPageDir } from "../src/urlMapper";
@@ -56,6 +56,7 @@ import { writePagePdf } from "../src/reporters/pdfReporter";
 import { buildBrokenLinksSummary, buildMetadataSummary } from "../src/reporters/reportSummaries";
 import { PageReport, SummaryReport } from "../src/reporters/reportTypes";
 import { captureFullPageScreenshot } from "../src/screenshots";
+import { captureModuleSpacingScreenshots } from "../src/spacingScreenshots";
 import { ensureDir } from "../src/utils/fileUtils";
 import { logger } from "../src/utils/logger";
 import { combineOverall, CategoryResult, Issue, statusFromIssues } from "../src/utils/status";
@@ -124,6 +125,25 @@ function emitRunProgress(phase: "started" | "completed" | "finishing", pageNum: 
 
 function moduleEnabled(moduleId: string): boolean {
   return isModuleEnabled(moduleId, enabledModules);
+}
+
+function toReportRelativePath(pageDir: string, filePath: string): string {
+  return path.relative(pageDir, filePath).split(path.sep).join("/");
+}
+
+function normalizeSpacingPaths(data: ModuleSpacingData, pageDir: string): ModuleSpacingData {
+  const rel = (filePath?: string) => (filePath ? toReportRelativePath(pageDir, filePath) : undefined);
+
+  return {
+    ...data,
+    overviewProdScreenshot: rel(data.overviewProdScreenshot),
+    overviewDevScreenshot: rel(data.overviewDevScreenshot),
+    gaps: data.gaps.map((gap) => ({
+      ...gap,
+      prodScreenshot: rel(gap.prodScreenshot),
+      devScreenshot: rel(gap.devScreenshot)
+    }))
+  };
 }
 
 function categoryFromIssues(category: string, issues: Issue[]): CategoryResult {
@@ -284,11 +304,7 @@ async function loadAndExtract(page: Page, url: string, source: Source): Promise<
       };
 
   const needHeadings = moduleEnabled("headings") || moduleEnabled("hTagHierarchy");
-  const needTechStack =
-    moduleEnabled("devTechnologies") ||
-    moduleEnabled("programmingLanguages") ||
-    moduleEnabled("cms") ||
-    moduleEnabled("serverComparison");
+  const needTechStack = moduleEnabled("devTechnologies") || moduleEnabled("serverComparison");
 
   const [metadata, headings, textStyles, content, images, links, language, schema, embeds, techStack] =
     await Promise.all([
@@ -445,12 +461,6 @@ for (const [index, mapping] of pageMappings.entries()) {
       if (moduleEnabled("devTechnologies")) {
         categories.devTechnologies = compareDevTechnologies(prodData.techStack, devData.techStack);
       }
-      if (moduleEnabled("programmingLanguages")) {
-        categories.programmingLanguages = compareProgrammingLanguages(prodData.techStack, devData.techStack);
-      }
-      if (moduleEnabled("cms")) {
-        categories.cms = compareCms(prodData.techStack, devData.techStack);
-      }
       if (moduleEnabled("serverComparison")) {
         categories.serverComparison = compareServerStack(prodData.techStack, devData.techStack);
       }
@@ -483,6 +493,13 @@ for (const [index, mapping] of pageMappings.entries()) {
       }
       if (moduleEnabled("language")) {
         categories.language = compareLanguage(prodData.language, devData.language);
+      }
+      if (moduleEnabled("moduleSpacing")) {
+        const spacingDir = path.join(pageDir, "spacing");
+        const captured = await captureModuleSpacingScreenshots(prodPage, devPage, spacingDir);
+        const prodSpacing = normalizeSpacingPaths(captured.prod, pageDir);
+        const devSpacing = normalizeSpacingPaths(captured.dev, pageDir);
+        categories.moduleSpacing = compareModuleSpacing(prodSpacing, devSpacing);
       }
       if (moduleEnabled("visual")) {
         await Promise.all([

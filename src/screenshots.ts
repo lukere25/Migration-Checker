@@ -23,7 +23,7 @@ const SCROLLBAR_STYLE = `
   }
 `;
 
-async function scrollPageForLazyContent(page: Page): Promise<void> {
+export async function scrollPageForLazyContent(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
     const height = Math.max(

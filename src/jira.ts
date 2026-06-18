@@ -1,7 +1,6 @@
 export interface JiraSettings {
   atlassianDomain: string;
-  projectId: string;
-  issueTypeId: string;
+  projectId?: string;
 }
 
 export interface JiraIssuePayload {
@@ -30,10 +29,6 @@ export function normalizeAtlassianDomain(input: string): string {
 }
 
 export function normalizeJiraProjectId(input: string): string {
-  return input.trim().replace(/\D/g, "");
-}
-
-export function normalizeJiraIssueTypeId(input: string): string {
   return input.trim().replace(/\D/g, "");
 }
 
@@ -70,19 +65,8 @@ export function buildJiraProjectLookupUrl(host: string, projectKey: string): str
   return `https://${normalizedHost}/rest/api/3/project/${key}`;
 }
 
-export function buildJiraIssueTypeLookupUrl(host: string, projectId: string): string {
-  const normalizedHost = normalizeAtlassianDomain(host);
-  const pid = normalizeJiraProjectId(projectId);
-  if (!normalizedHost || !pid) return "";
-  return `https://${normalizedHost}/rest/api/3/issue/createmeta?projectIds=${pid}&expand=projects.issuetypes`;
-}
-
 export function isJiraConfigured(settings: Partial<JiraSettings>): boolean {
-  return Boolean(
-    normalizeAtlassianDomain(settings.atlassianDomain || "") &&
-      normalizeJiraProjectId(settings.projectId || "") &&
-      normalizeJiraIssueTypeId(settings.issueTypeId || "")
-  );
+  return Boolean(normalizeAtlassianDomain(settings.atlassianDomain || ""));
 }
 
 export function buildJiraSummary(payload: JiraIssuePayload): string {
@@ -112,21 +96,22 @@ export function buildJiraDescription(payload: JiraIssuePayload): string {
   return lines.join("\n");
 }
 
-/** Jira Cloud create-issue form prefilled via URL query parameters. */
+/** Opens Jira create-issue with title and description prefilled. Project is optional. */
 export function buildJiraCreateIssueUrl(settings: JiraSettings, payload: JiraIssuePayload): string {
   const host = normalizeAtlassianDomain(settings.atlassianDomain);
-  const projectId = normalizeJiraProjectId(settings.projectId);
-  const issueTypeId = normalizeJiraIssueTypeId(settings.issueTypeId);
-  if (!host || !projectId || !issueTypeId) {
+  if (!host) {
     throw new Error("Jira is not configured");
   }
 
   const params = new URLSearchParams({
-    pid: projectId,
-    issuetype: issueTypeId,
     summary: buildJiraSummary(payload),
     description: buildJiraDescription(payload)
   });
+
+  const projectId = normalizeJiraProjectId(settings.projectId || "");
+  if (projectId) {
+    params.set("pid", projectId);
+  }
 
   return `https://${host}/secure/CreateIssueDetails!init.jspa?${params.toString()}`;
 }

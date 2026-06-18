@@ -9,15 +9,14 @@ import {
   headingTreeCss,
   renderBrokenLinksBody,
   renderContentBody,
-  renderCmsBody,
   renderDevTechnologiesBody,
   renderEmbedsBody,
   renderHeadingsBody,
   renderHTagHierarchyBody,
   renderImagesBody,
   renderLanguageBody,
+  renderModuleSpacingBody,
   renderPageSpeedBody,
-  renderProgrammingLanguagesBody,
   renderSchemaBody,
   renderServerComparisonBody,
   renderTextStyleBody
@@ -61,7 +60,7 @@ function renderIssuesPanel(report: PageReport): string {
 
   return `<section class="report-issues-panel" id="issues-panel">
     <h2>Issues</h2>
-    <p class="panel-subtitle">Each row has a <strong>Create Jira issue</strong> link with summary and description prefilled. Configure Jira under <a href="/settings.html">Settings</a> if links say Configure Jira.</p>
+    <p class="panel-subtitle">Each row has an <strong>Open Jira</strong> link with title and description prefilled. Set your Jira domain under <a href="/settings.html">Settings</a>.</p>
     ${renderIssuesBody(report)}
   </section>`;
 }
@@ -216,6 +215,240 @@ const pageReportCss = `
     gap: 0;
     align-items: start;
   }
+  .screens-compare-grid--two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .spacing-gap-legend {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-elevated);
+  }
+  .spacing-gap-table-wrap {
+    margin: 0 0 16px;
+  }
+  .spacing-gap-table th:first-child,
+  .spacing-gap-table td.spacing-gap-mark-cell {
+    width: 52px;
+    text-align: center;
+    vertical-align: middle;
+  }
+  .spacing-gap-table th:nth-child(2),
+  .spacing-gap-table td:nth-child(2) {
+    width: 42%;
+  }
+  .spacing-gap-table th:nth-child(3),
+  .spacing-gap-table td:nth-child(3),
+  .spacing-gap-table th:nth-child(4),
+  .spacing-gap-table td:nth-child(4) {
+    width: 12%;
+    white-space: nowrap;
+  }
+  .spacing-legend-tooltip-wrap {
+    position: relative;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .spacing-legend-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .spacing-legend-swatch {
+    flex: 0 0 22px;
+    width: 22px;
+    height: 22px;
+    border: 2px solid currentColor;
+    border-radius: 4px;
+    box-sizing: border-box;
+    cursor: help;
+  }
+  .spacing-legend-swatch--inside {
+    border-style: dashed;
+  }
+  .spacing-legend-tooltip {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    transform: translateX(-50%);
+    z-index: 20;
+    display: none;
+    min-width: 220px;
+    max-width: 320px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.45;
+    text-align: left;
+    pointer-events: none;
+  }
+  .spacing-legend-tooltip strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+  }
+  .spacing-legend-tooltip span {
+    display: block;
+    color: var(--muted);
+  }
+  .spacing-legend-tooltip span:first-of-type {
+    margin-bottom: 2px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .spacing-legend-tooltip-wrap:hover .spacing-legend-tooltip,
+  .spacing-legend-tooltip-wrap:focus-within .spacing-legend-tooltip {
+    display: block;
+  }
+  @media (max-width: 900px) {
+    .spacing-gap-legend { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (max-width: 640px) {
+    .spacing-gap-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .spacing-gap-table th:nth-child(3),
+    .spacing-gap-table td:nth-child(3),
+    .spacing-gap-table th:nth-child(4),
+    .spacing-gap-table td:nth-child(4) {
+      white-space: normal;
+    }
+  }
+  .language-tags-panel {
+    margin: 0 0 18px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-elevated);
+  }
+  .language-tags-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .language-tags-col {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .language-tags-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .language-tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .language-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(59, 130, 246, 0.45);
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+  .language-tag.is-empty {
+    border-color: var(--border);
+    background: var(--panel);
+    color: var(--muted);
+    font-weight: 600;
+  }
+  @media (max-width: 760px) {
+    .language-tags-grid { grid-template-columns: 1fr; }
+  }
+  .text-style-compare-block {
+    margin: 0 0 20px;
+    padding: 0 0 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .text-style-compare-block:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+  .text-style-tag {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: middle;
+  }
+  .text-style-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin: 0 0 12px;
+  }
+  .text-style-preview-col {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-elevated);
+  }
+  .text-style-preview {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text);
+    word-break: break-word;
+  }
+  .text-style-table tr.is-differ td,
+  .text-style-table tr.is-fail td {
+    background: rgba(245, 158, 11, 0.08);
+  }
+  .text-style-table tr.is-fail td {
+    background: rgba(239, 68, 68, 0.08);
+  }
+  .text-style-color-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .text-style-color-swatch {
+    flex: 0 0 14px;
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    box-sizing: border-box;
+  }
+  .text-style-empty {
+    color: var(--muted);
+  }
+  @media (max-width: 760px) {
+    .text-style-preview-grid { grid-template-columns: 1fr; }
+  }
   .screens-col {
     border-right: 1px solid var(--border);
     min-width: 0;
@@ -239,7 +472,8 @@ const pageReportCss = `
     vertical-align: top;
   }
   @media (max-width: 900px) {
-    .screens-compare-grid { grid-template-columns: 1fr; }
+    .screens-compare-grid,
+    .screens-compare-grid--two { grid-template-columns: 1fr; }
     .screens-col { border-right: none; border-bottom: 1px solid var(--border); }
     .screens-col:last-child { border-bottom: none; }
   }
@@ -307,7 +541,7 @@ function renderAllIssuesSummarySection(results: PageReport[]): string {
 
   return `<section class="report-issues-panel summary-issues-panel" id="all-issues-summary">
     <h2>All issues</h2>
-    <p class="panel-subtitle">Every issue across all compared pages. Use <strong>Create Jira issue</strong> to file a ticket with prefilled details.</p>
+    <p class="panel-subtitle">Every issue across all compared pages. Use <strong>Open Jira</strong> to file a ticket with title and description prefilled.</p>
     <div class="issues-table-wrap">
       <table class="issues-table">
         <thead><tr><th>Page</th><th>Browser</th><th>Severity</th><th>Category</th><th>Message</th><th>Jira issue</th></tr></thead>
@@ -470,34 +704,10 @@ function renderPageAccordions(report: PageReport): string {
           renderAccordion({
             id: anchor,
             title: "Development technologies",
-            subtitle: "Frameworks, libraries, and front-end stack signals",
+            subtitle: "Frameworks, libraries, programming languages, and CMS",
             status,
             open: false,
             body: renderDevTechnologiesBody(report)
-          })
-        );
-        break;
-      case "programmingLanguages":
-        parts.push(
-          renderAccordion({
-            id: anchor,
-            title: "Programming languages",
-            subtitle: "Backend language markers and runtime hints",
-            status,
-            open: false,
-            body: renderProgrammingLanguagesBody(report)
-          })
-        );
-        break;
-      case "cms":
-        parts.push(
-          renderAccordion({
-            id: anchor,
-            title: "CMS",
-            subtitle: "CMS platform and generator detection",
-            status,
-            open: false,
-            body: renderCmsBody(report)
           })
         );
         break;
@@ -566,7 +776,7 @@ function renderPageAccordions(report: PageReport): string {
           renderAccordion({
             id: anchor,
             title: "Text style match",
-            subtitle: "Computed typography comparison",
+            subtitle: "Side-by-side font, size, weight, and color comparison",
             status,
             open: false,
             body: renderTextStyleBody(report)
@@ -606,6 +816,18 @@ function renderPageAccordions(report: PageReport): string {
             status,
             open: false,
             body: renderImagesBody(report)
+          })
+        );
+        break;
+      case "moduleSpacing":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Module spacing",
+            subtitle: "Colored gap bands on full-page screenshots (live vs migration)",
+            status,
+            open: false,
+            body: renderModuleSpacingBody(report)
           })
         );
         break;
