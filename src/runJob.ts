@@ -631,6 +631,9 @@ function buildRunEnv(job: RunJob): NodeJS.ProcessEnv {
   env.PROD_BASE_URL = config.prodBaseUrl;
   env.DEV_BASE_URL = config.devBaseUrl;
   env.DEV_PASSWORD = config.devPassword;
+  env.JIRA_ATLASSIAN_DOMAIN = config.jiraAtlassianDomain;
+  env.JIRA_PROJECT_ID = config.jiraProjectId;
+  env.JIRA_ISSUE_TYPE_ID = config.jiraIssueTypeId;
   env.ENABLED_MODULES = serializeEnabledModules(job.enabledModules);
   env.AUTH_ALREADY_DONE = "true";
   env.GENERATE_PDF = config.generatePdf ? "true" : "false";

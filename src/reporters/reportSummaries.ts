@@ -12,6 +12,9 @@ export interface SummaryIssueRow {
   prodValue?: string;
   devValue?: string;
   field?: string;
+  category?: string;
+  prodUrl?: string;
+  devUrl?: string;
 }
 
 export interface MetadataSummaryBox {
@@ -50,7 +53,10 @@ function issueToRow(report: PageReport, issue: Issue, field?: string): SummaryIs
     url: issue.url,
     prodValue: issue.prodValue,
     devValue: issue.devValue,
-    field
+    field,
+    category: issue.category,
+    prodUrl: report.prodUrl,
+    devUrl: report.devUrl
   };
 }
 
@@ -69,7 +75,10 @@ export function buildMetadataSummary(results: PageReport[]): MetadataSummaryBox 
           severity: item.status === "FAIL" ? "FAIL" : "WARNING",
           message: item.message,
           field: item.field,
-          devValue: item.value
+          category: "Metadata",
+          devValue: item.value,
+          prodUrl: report.prodUrl,
+          devUrl: report.devUrl
         });
       }
       continue;

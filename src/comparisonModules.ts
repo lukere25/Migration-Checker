@@ -6,6 +6,12 @@ export interface ComparisonModule {
 
 export const COMPARISON_MODULES: ComparisonModule[] = [
   { id: "metadata", label: "Metadata", description: "Meta tags and SEO fields" },
+  { id: "schema", label: "Schema", description: "JSON-LD structured data comparison" },
+  { id: "embeds", label: "Iframe & embeds", description: "Iframe, embed, and embedded widget comparison" },
+  { id: "devTechnologies", label: "Development technologies", description: "Frameworks, libraries, and front-end stack signals" },
+  { id: "programmingLanguages", label: "Programming languages", description: "Backend language markers and runtime hints" },
+  { id: "cms", label: "CMS", description: "CMS platform and generator detection" },
+  { id: "serverComparison", label: "Server comparison", description: "Server, hosting, and response header comparison" },
   { id: "language", label: "Language", description: "HTML lang attribute" },
   { id: "brokenLinks", label: "Broken links", description: "HTTP status on internal links" },
   { id: "headings", label: "Headings", description: "Heading structure and text" },

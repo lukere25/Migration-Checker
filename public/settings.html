@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Settings · Sync Scope</title>
+  <link rel="icon" href="/sync-scope-logo.png" type="image/png">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f14;
+      --bg-elevated: #111820;
+      --panel: #151c26;
+      --border: #243044;
+      --text: #e8edf5;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-soft: rgba(59, 130, 246, 0.12);
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.15), transparent),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .app-header {
+      border-bottom: 1px solid var(--border);
+      background: rgba(11, 15, 20, 0.85);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .app-header-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 5px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .brand-logo {
+      max-height: 50px;
+      width: auto;
+      display: block;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .settings-link,
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+
+    .settings-link.icon-only {
+      width: 40px;
+      padding: 0;
+    }
+
+    .settings-link.is-active,
+    .settings-link:hover,
+    .back-link:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 28px 24px 64px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .card-title {
+      margin: 0 0 6px;
+      font-size: 1.05rem;
+    }
+
+    .card-desc {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    label {
+      display: block;
+      margin: 0 0 6px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .text-field {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text);
+      border-radius: var(--radius-sm);
+      padding: 11px 12px;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .text-field:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .hint {
+      margin: -8px 0 16px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .hint code {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+    }
+
+    .url-preview {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      margin: 0 0 16px;
+      font-size: 13px;
+    }
+
+    .url-preview dt {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+    }
+
+    .url-preview dd {
+      margin: 0 0 12px;
+      word-break: break-all;
+    }
+
+    .url-preview dd:last-child {
+      margin-bottom: 0;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .primary {
+      border: none;
+      border-radius: var(--radius-sm);
+      background: var(--accent);
+      color: #fff;
+      padding: 11px 18px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .message {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+    }
+
+    .message.success {
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.35);
+      color: #86efac;
+    }
+
+    .message.error {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+    }
+
+    .hidden { display: none; }
+
+    .lookup-panel {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      margin: -4px 0 16px;
+    }
+
+    .lookup-title {
+      margin: 0 0 8px;
+      font-size: 13px;
+    }
+
+    .lookup-panel a {
+      color: var(--accent);
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-header-inner">
+      <div class="brand">
+        <a href="/"><img src="/sync-scope-logo.png" alt="Sync Scope" class="brand-logo"></a>
+        <div>
+          <h1>Settings</h1>
+          <p>Configure integrations used by Sync Scope reports.</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <a class="settings-link icon-only is-active" href="/settings.html" aria-label="Settings" title="Settings">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7m7.43-2.75c.04-.32.07-.64.07-.97 0-.33-.03-.66-.07-1l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.2 7.2 0 0 0-1.73-1l-.38-2.65A.5.5 0 0 0 13 2h-4a.5.5 0 0 0-.49.42l-.38 2.65c-.62.25-1.2.58-1.73 1l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64L3.57 11c-.04.34-.07.67-.07 1 0 .33.03.65.07.97l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.13.22.39.3.6.22l2.49-1c.53.42 1.11.75 1.73 1l.38 2.65c.05.24.26.41.49.41h4c.23 0 .44-.17.49-.41l.38-2.65c.62-.25 1.2-.58 1.73-1l2.49 1c.22.09.47 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64z"/></svg>
+        </a>
+        <a class="back-link" href="/">Back to dashboard</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2 class="card-title">Jira</h2>
+      <p class="card-desc">Used by <strong>Create Jira</strong> buttons in report issue tables. Opens a prefilled Jira create-issue form via URL parameters.</p>
+
+      <form id="jira-settings-form">
+        <label for="jiraProjectUrl">Paste Jira project or board URL (optional)</label>
+        <input
+          id="jiraProjectUrl"
+          name="jiraProjectUrl"
+          type="url"
+          class="text-field"
+          placeholder="https://eight25media.atlassian.net/jira/software/c/projects/PAND/boards/"
+        >
+        <p class="hint">We extract the site domain and project key (e.g. <code>PAND</code>) from URLs like the example above.</p>
+
+        <label for="jiraAtlassianDomain">Atlassian domain</label>
+        <input
+          id="jiraAtlassianDomain"
+          name="jiraAtlassianDomain"
+          type="text"
+          class="text-field"
+          placeholder="mycompany or mycompany.atlassian.net"
+          autocomplete="off"
+        >
+        <p class="hint">Your Jira Cloud site subdomain, e.g. <code>mycompany</code> for <code>mycompany.atlassian.net</code>.</p>
+
+        <label for="jiraProjectId">Project ID (numeric)</label>
+        <input
+          id="jiraProjectId"
+          name="jiraProjectId"
+          type="text"
+          class="text-field"
+          placeholder="10000"
+          inputmode="numeric"
+          autocomplete="off"
+        >
+        <p class="hint">Numeric <code>pid</code> for create-issue links — <strong>not</strong> the project key (<code>PAND</code>). Use the lookup link below to find it.</p>
+
+        <label for="jiraIssueTypeId">Issue type ID (numeric)</label>
+        <input
+          id="jiraIssueTypeId"
+          name="jiraIssueTypeId"
+          type="text"
+          class="text-field"
+          placeholder="10001"
+          inputmode="numeric"
+          autocomplete="off"
+        >
+        <p class="hint">Numeric <code>issuetype</code> for create-issue links (e.g. Task, Bug). Use the lookup link below after setting the project ID.</p>
+
+        <div class="lookup-panel hidden" id="jira-lookup-panel">
+          <p class="lookup-title"><strong>Look up numeric project ID</strong></p>
+          <p class="hint">While logged into Jira, open this link and copy the <code>"id"</code> value from the JSON (e.g. <code>"id": "10000"</code>).</p>
+          <p><a id="jira-lookup-link" href="#" target="_blank" rel="noopener noreferrer">Open project API lookup</a></p>
+        </div>
+
+        <div class="lookup-panel hidden" id="jira-issuetype-lookup-panel">
+          <p class="lookup-title"><strong>Look up issue type ID</strong></p>
+          <p class="hint">While logged into Jira, open this link and find the issue type you want (e.g. Task or Bug). Copy its <code>"id"</code> value (e.g. <code>"id": "10001"</code>).</p>
+          <p><a id="jira-issuetype-lookup-link" href="#" target="_blank" rel="noopener noreferrer">Open issue type API lookup</a></p>
+        </div>
+
+        <dl class="url-preview">
+          <dt>Example create-issue URL</dt>
+          <dd id="jira-url-preview">Configure domain and project ID to preview.</dd>
+        </dl>
+
+        <div class="actions">
+          <button type="submit" class="primary">Save Jira settings</button>
+        </div>
+        <div id="jira-message" class="message hidden"></div>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("jira-settings-form");
+    const projectUrlInput = document.getElementById("jiraProjectUrl");
+    const domainInput = document.getElementById("jiraAtlassianDomain");
+    const projectInput = document.getElementById("jiraProjectId");
+    const issueTypeInput = document.getElementById("jiraIssueTypeId");
+    const previewEl = document.getElementById("jira-url-preview");
+    const messageEl = document.getElementById("jira-message");
+    const lookupPanel = document.getElementById("jira-lookup-panel");
+    const lookupLink = document.getElementById("jira-lookup-link");
+    const issueTypeLookupPanel = document.getElementById("jira-issuetype-lookup-panel");
+    const issueTypeLookupLink = document.getElementById("jira-issuetype-lookup-link");
+
+    function normalizeDomain(value) {
+      const trimmed = String(value || "").trim();
+      if (!trimmed) return "";
+      let host = trimmed.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+      if (!host.includes(".")) host = host + ".atlassian.net";
+      return host.toLowerCase();
+    }
+
+    function parseProjectUrl(value) {
+      const trimmed = String(value || "").trim();
+      if (!trimmed) return null;
+      try {
+        const url = /^https?:\/\//i.test(trimmed) ? new URL(trimmed) : null;
+        const path = url ? url.pathname : trimmed;
+        const match = path.match(/\/projects\/([A-Za-z][A-Za-z0-9]*)\b/i);
+        if (!match) return null;
+        return {
+          host: url ? normalizeDomain(url.host) : "",
+          projectKey: match[1].toUpperCase()
+        };
+      } catch {
+        return null;
+      }
+    }
+
+    function updateLookupPanel() {
+      const host = normalizeDomain(domainInput.value);
+      const parsed = parseProjectUrl(projectUrlInput.value);
+      const projectKey = parsed?.projectKey || "";
+      const lookupHost = parsed?.host || host;
+
+      if (!lookupHost || !projectKey) {
+        lookupPanel.classList.add("hidden");
+        return;
+      }
+
+      const lookupUrl = "https://" + lookupHost + "/rest/api/3/project/" + projectKey;
+      lookupLink.href = lookupUrl;
+      lookupLink.textContent = lookupUrl;
+      lookupPanel.classList.remove("hidden");
+    }
+
+    function updateIssueTypeLookupPanel() {
+      const host = normalizeDomain(domainInput.value);
+      const projectId = normalizeProjectId(projectInput.value);
+
+      if (!host || !projectId) {
+        issueTypeLookupPanel.classList.add("hidden");
+        return;
+      }
+
+      const lookupUrl =
+        "https://" + host + "/rest/api/3/issue/createmeta?projectIds=" + projectId + "&expand=projects.issuetypes";
+      issueTypeLookupLink.href = lookupUrl;
+      issueTypeLookupLink.textContent = lookupUrl;
+      issueTypeLookupPanel.classList.remove("hidden");
+    }
+
+    function normalizeProjectId(value) {
+      return String(value || "").trim().replace(/\D/g, "");
+    }
+
+    function updatePreview() {
+      const host = normalizeDomain(domainInput.value);
+      const projectId = normalizeProjectId(projectInput.value);
+      const issueTypeId = normalizeProjectId(issueTypeInput.value);
+      if (!host || !projectId || !issueTypeId) {
+        previewEl.textContent = "Configure domain, project ID, and issue type ID to preview.";
+        return;
+      }
+
+      const params = new URLSearchParams({
+        pid: projectId,
+        issuetype: issueTypeId,
+        summary: "[Sync Scope] FAIL · Metadata: Example issue",
+        description: "Example prefilled issue from Sync Scope."
+      });
+      previewEl.textContent = "https://" + host + "/secure/CreateIssueDetails!init.jspa?" + params.toString();
+    }
+
+    function showMessage(text, type) {
+      messageEl.textContent = text;
+      messageEl.className = "message " + type;
+      messageEl.classList.remove("hidden");
+    }
+
+    domainInput.addEventListener("input", () => {
+      updateLookupPanel();
+      updateIssueTypeLookupPanel();
+      updatePreview();
+    });
+    projectInput.addEventListener("input", () => {
+      updateIssueTypeLookupPanel();
+      updatePreview();
+    });
+    issueTypeInput.addEventListener("input", updatePreview);
+    projectUrlInput.addEventListener("input", () => {
+      const parsed = parseProjectUrl(projectUrlInput.value);
+      if (parsed?.host) domainInput.value = parsed.host;
+      updateLookupPanel();
+      updateIssueTypeLookupPanel();
+      updatePreview();
+    });
+    projectUrlInput.addEventListener("change", () => {
+      const parsed = parseProjectUrl(projectUrlInput.value);
+      if (parsed?.host) domainInput.value = parsed.host;
+      updateLookupPanel();
+      updateIssueTypeLookupPanel();
+      updatePreview();
+    });
+
+    async function loadSettings() {
+      try {
+        const response = await fetch("/api/settings");
+        if (!response.ok) return;
+        const data = await response.json();
+        domainInput.value = data.jiraAtlassianDomain || "";
+        projectInput.value = data.jiraProjectId || "";
+        issueTypeInput.value = data.jiraIssueTypeId || "";
+        updateLookupPanel();
+        updateIssueTypeLookupPanel();
+        updatePreview();
+      } catch {
+        updatePreview();
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      messageEl.classList.add("hidden");
+
+      try {
+        const response = await fetch("/api/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jiraAtlassianDomain: domainInput.value.trim(),
+            jiraProjectId: projectInput.value.trim(),
+            jiraIssueTypeId: issueTypeInput.value.trim()
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not save Jira settings");
+
+        domainInput.value = data.jiraAtlassianDomain || "";
+        projectInput.value = data.jiraProjectId || "";
+        issueTypeInput.value = data.jiraIssueTypeId || "";
+        updateLookupPanel();
+        updateIssueTypeLookupPanel();
+        updatePreview();
+        showMessage("Jira settings saved.", "success");
+      } catch (error) {
+        showMessage(error.message, "error");
+      }
+    });
+
+    void loadSettings();
+  </script>
+</body>
+</html>

@@ -122,6 +122,32 @@ export const pageReportDashboardCss = `
     flex-shrink: 0;
   }
 
+  .report-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .settings-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+
+  .settings-link:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
   .theme-toggle {
     border: 1px solid var(--border);
     background: var(--panel);
@@ -283,6 +309,11 @@ export const pageReportDashboardCss = `
   }
 
   .panel-subtitle a { color: var(--accent); }
+
+  .panel-section-title {
+    margin: 20px 0 10px;
+    font-size: 0.95rem;
+  }
 
   .pill {
     border-radius: 999px;

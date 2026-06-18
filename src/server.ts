@@ -171,23 +171,53 @@ app.get("/api/settings", (_req, res) => {
 
 app.put("/api/settings", async (req, res) => {
   try {
-    const liveBaseUrl = typeof req.body?.liveBaseUrl === "string" ? req.body.liveBaseUrl : "";
-    const migrationBaseUrl =
-      typeof req.body?.migrationBaseUrl === "string" ? req.body.migrationBaseUrl : "";
-    const migrationPassword =
-      typeof req.body?.migrationPassword === "string" ? req.body.migrationPassword : "";
+    const body = req.body ?? {};
+    const current = getAppSettings();
+    const patch: Partial<typeof current> = {};
 
-    if (!liveBaseUrl.trim() || !migrationBaseUrl.trim()) {
-      res.status(400).json({ error: "Live URL and Migration URL are required" });
+    if (typeof body.liveBaseUrl === "string") patch.liveBaseUrl = body.liveBaseUrl.trim();
+    if (typeof body.migrationBaseUrl === "string") patch.migrationBaseUrl = body.migrationBaseUrl.trim();
+    if (typeof body.migrationPassword === "string") patch.migrationPassword = body.migrationPassword;
+    if (typeof body.jiraAtlassianDomain === "string") {
+      patch.jiraAtlassianDomain = body.jiraAtlassianDomain.trim();
+    }
+    if (typeof body.jiraProjectId === "string") patch.jiraProjectId = body.jiraProjectId.trim();
+    if (typeof body.jiraIssueTypeId === "string") patch.jiraIssueTypeId = body.jiraIssueTypeId.trim();
+    if (body.enabledModules !== undefined) {
+      patch.enabledModules = parseEnabledModulesInput(body.enabledModules);
+    }
+
+    const updatingMigration =
+      patch.liveBaseUrl !== undefined ||
+      patch.migrationBaseUrl !== undefined ||
+      patch.migrationPassword !== undefined;
+
+    if (updatingMigration) {
+      const liveBaseUrl = patch.liveBaseUrl ?? current.liveBaseUrl;
+      const migrationBaseUrl = patch.migrationBaseUrl ?? current.migrationBaseUrl;
+      const migrationPassword = patch.migrationPassword ?? current.migrationPassword;
+
+      if (!liveBaseUrl.trim() || !migrationBaseUrl.trim()) {
+        res.status(400).json({ error: "Live URL and Migration URL are required" });
+        return;
+      }
+
+      if (!migrationPassword.trim()) {
+        res.status(400).json({ error: "Migration password is required" });
+        return;
+      }
+
+      patch.liveBaseUrl = liveBaseUrl;
+      patch.migrationBaseUrl = migrationBaseUrl;
+      patch.migrationPassword = migrationPassword;
+    }
+
+    if (!Object.keys(patch).length) {
+      res.status(400).json({ error: "No settings provided" });
       return;
     }
 
-    if (!migrationPassword.trim()) {
-      res.status(400).json({ error: "Migration password is required" });
-      return;
-    }
-
-    const settings = await saveAppSettings({ liveBaseUrl, migrationBaseUrl, migrationPassword });
+    const settings = await saveAppSettings(patch);
     res.json(settings);
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : String(error) });

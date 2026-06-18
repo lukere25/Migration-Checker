@@ -1,11 +1,20 @@
 import { COMPARISON_MODULES, normalizeEnabledModuleIds } from "../comparisonModules";
 import { getMetadataCheckItems } from "../comparators/metadataComparator";
+import { getEmbedCheckItems } from "../comparators/embedComparator";
+import { getStackCheckItems } from "../comparators/techStackComparator";
+import { getSchemaCheckItems } from "../comparators/schemaComparator";
 import { CategoryResult, Status } from "../utils/status";
 import { PageReport } from "./reportTypes";
 import { escapeReportHtml, statusClass } from "./pageReportLayout";
 
 export const MODULE_PAGE_ANCHORS: Record<string, string> = {
   metadata: "all-meta-tags-comparison",
+  schema: "module-schema",
+  embeds: "module-embeds",
+  devTechnologies: "module-dev-technologies",
+  programmingLanguages: "module-programming-languages",
+  cms: "module-cms",
+  serverComparison: "module-server-comparison",
   language: "module-language",
   brokenLinks: "module-broken-links",
   headings: "module-headings",
@@ -19,6 +28,12 @@ export const MODULE_PAGE_ANCHORS: Record<string, string> = {
 
 export const MODULE_SUMMARY_ANCHORS: Record<string, string> = {
   metadata: "metadata-summary",
+  schema: "summary-module-schema",
+  embeds: "summary-module-embeds",
+  devTechnologies: "summary-module-devTechnologies",
+  programmingLanguages: "summary-module-programmingLanguages",
+  cms: "summary-module-cms",
+  serverComparison: "summary-module-serverComparison",
   brokenLinks: "broken-links-summary",
   language: "summary-module-language",
   headings: "summary-module-headings",
@@ -44,6 +59,33 @@ export function computeModulePassPercent(moduleId: string, result: CategoryResul
   switch (moduleId) {
     case "metadata": {
       const items = getMetadataCheckItems(result);
+      if (items.length) {
+        const passed = items.filter((item) => item.status === "PASS").length;
+        return Math.round((passed / items.length) * 100);
+      }
+      break;
+    }
+    case "schema": {
+      const items = getSchemaCheckItems(result);
+      if (items.length) {
+        const passed = items.filter((item) => item.status === "PASS").length;
+        return Math.round((passed / items.length) * 100);
+      }
+      break;
+    }
+    case "embeds": {
+      const items = getEmbedCheckItems(result);
+      if (items.length) {
+        const passed = items.filter((item) => item.status === "PASS").length;
+        return Math.round((passed / items.length) * 100);
+      }
+      break;
+    }
+    case "devTechnologies":
+    case "programmingLanguages":
+    case "cms":
+    case "serverComparison": {
+      const items = getStackCheckItems(result);
       if (items.length) {
         const passed = items.filter((item) => item.status === "PASS").length;
         return Math.round((passed / items.length) * 100);

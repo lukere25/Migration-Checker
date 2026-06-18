@@ -2,7 +2,6 @@ import path from "path";
 import { COMPARISON_MODULES } from "../comparisonModules";
 import { config } from "../config";
 import { writeText } from "../utils/fileUtils";
-import { Issue } from "../utils/status";
 import { PageReport, SummaryReport } from "./reportTypes";
 import { buildBrokenLinksSummary, buildMetadataSummary } from "./reportSummaries";
 import { allMetaComparisonComponentCss, renderAllMetaTagsComparisonBody } from "./allMetaComparisonComponent";
@@ -10,11 +9,17 @@ import {
   headingTreeCss,
   renderBrokenLinksBody,
   renderContentBody,
+  renderCmsBody,
+  renderDevTechnologiesBody,
+  renderEmbedsBody,
   renderHeadingsBody,
   renderHTagHierarchyBody,
   renderImagesBody,
   renderLanguageBody,
   renderPageSpeedBody,
+  renderProgrammingLanguagesBody,
+  renderSchemaBody,
+  renderServerComparisonBody,
   renderTextStyleBody
 } from "./moduleReportPanels";
 import { moduleScoreCardsCss, renderModuleScoreCards, renderSummaryModuleScoreCards, getReportEnabledModuleIds, getSummaryEnabledModuleIds, getModulePageAnchor } from "./moduleScoreCards";
@@ -25,25 +30,46 @@ import {
   renderAccordion,
   statusClass
 } from "./pageReportLayout";
+import { issueTableCss, IssueTableContext, renderIssueJiraLink, renderIssueTableRows, renderJiraLinkForSummaryRow } from "./issueTable";
 
-function issueRows(issues: Issue[]): string {
-  if (!issues.length) return '<tr><td colspan="5">No issues found.</td></tr>';
-  return issues
-    .map(
-      (issue) => `<tr>
-        <td><span class="pill ${issue.severity.toLowerCase()}">${issue.severity}</span></td>
-        <td>${escapeReportHtml(issue.category)}</td>
-        <td>${escapeReportHtml(issue.message)}${issue.url ? `<br><small>${escapeReportHtml(issue.url)}</small>` : ""}</td>
-        <td>${escapeReportHtml(issue.prodValue || "")}</td>
-        <td>${escapeReportHtml(issue.devValue || "")}</td>
-      </tr>`
-    )
-    .join("");
+function issueTableContext(report: PageReport): IssueTableContext {
+  const relative = path.relative(config.reportsDir, report.reportPaths.html).replace(/\\/g, "/");
+  const reportUrl =
+    relative && !relative.startsWith("..") ? `/reports/${relative}` : undefined;
+
+  return {
+    pageName: report.pageName,
+    prodUrl: report.prodUrl,
+    devUrl: report.devUrl,
+    reportUrl
+  };
+}
+
+function renderIssuesBody(report: PageReport): string {
+  return `<div class="issues-table-wrap">
+    <table class="issues-table">
+      <thead><tr><th>Severity</th><th>Category</th><th>Message</th><th>Live</th><th>Migration</th><th>Jira</th></tr></thead>
+      <tbody>${renderIssueTableRows(report.issues, issueTableContext(report))}</tbody>
+    </table>
+  </div>`;
+}
+
+function renderIssuesPanel(report: PageReport): string {
+  if (!report.issues.length) {
+    return "";
+  }
+
+  return `<section class="report-issues-panel" id="issues-panel">
+    <h2>Issues</h2>
+    <p class="panel-subtitle">Each row has a <strong>Create Jira issue</strong> link with summary and description prefilled. Configure Jira under <a href="/settings.html">Settings</a> if links say Configure Jira.</p>
+    ${renderIssuesBody(report)}
+  </section>`;
 }
 
 const summaryReportCss = `
   ${pageReportDashboardCss}
   ${moduleScoreCardsCss}
+  ${issueTableCss}
   .stat-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -172,6 +198,7 @@ const pageReportCss = `
   ${moduleScoreCardsCss}
   ${headingTreeCss}
   ${allMetaComparisonComponentCss}
+  ${issueTableCss}
   .screens-compare {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -228,7 +255,7 @@ const pageReportCss = `
 `;
 
 function summaryTableRows(rows: ReturnType<typeof buildMetadataSummary>["rows"], emptyMessage: string): string {
-  if (!rows.length) return `<tr><td colspan="6">${escapeReportHtml(emptyMessage)}</td></tr>`;
+  if (!rows.length) return `<tr><td colspan="7">${escapeReportHtml(emptyMessage)}</td></tr>`;
   return rows
     .map(
       (row) => `<tr>
@@ -238,9 +265,56 @@ function summaryTableRows(rows: ReturnType<typeof buildMetadataSummary>["rows"],
         <td>${escapeReportHtml(row.field || "")}</td>
         <td>${escapeReportHtml(row.message)}${row.url ? `<br><small>${escapeReportHtml(row.url)}</small>` : ""}</td>
         <td>${escapeReportHtml(row.devValue || row.prodValue || "")}</td>
+        <td class="jira-action-cell">${renderJiraLinkForSummaryRow(row)}</td>
       </tr>`
     )
     .join("");
+}
+
+function renderAllIssuesSummarySection(results: PageReport[]): string {
+  const rows = results.flatMap((report) =>
+    report.issues.map((issue) => ({
+      pageName: report.pageName,
+      path: report.path,
+      browserName: report.browserName,
+      severity: issue.severity,
+      message: issue.message,
+      url: issue.url,
+      prodValue: issue.prodValue,
+      devValue: issue.devValue,
+      category: issue.category,
+      prodUrl: report.prodUrl,
+      devUrl: report.devUrl
+    }))
+  );
+
+  if (!rows.length) {
+    return "";
+  }
+
+  const body = rows
+    .map(
+      (row) => `<tr>
+        <td>${escapeReportHtml(row.pageName)}</td>
+        <td>${escapeReportHtml(row.browserName)}</td>
+        <td><span class="pill ${row.severity.toLowerCase()}">${row.severity}</span></td>
+        <td>${escapeReportHtml(row.category || "")}</td>
+        <td>${escapeReportHtml(row.message)}${row.url ? `<br><small>${escapeReportHtml(row.url)}</small>` : ""}</td>
+        <td class="jira-action-cell">${renderJiraLinkForSummaryRow(row)}</td>
+      </tr>`
+    )
+    .join("");
+
+  return `<section class="report-issues-panel summary-issues-panel" id="all-issues-summary">
+    <h2>All issues</h2>
+    <p class="panel-subtitle">Every issue across all compared pages. Use <strong>Create Jira issue</strong> to file a ticket with prefilled details.</p>
+    <div class="issues-table-wrap">
+      <table class="issues-table">
+        <thead><tr><th>Page</th><th>Browser</th><th>Severity</th><th>Category</th><th>Message</th><th>Jira issue</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+  </section>`;
 }
 
 function renderMetadataSummaryBox(results: PageReport[]): string {
@@ -258,7 +332,7 @@ function renderMetadataSummaryBox(results: PageReport[]): string {
       <span><strong>Field issues:</strong> ${summary.issueCount}</span>
     </div>
     <table>
-      <thead><tr><th>Page</th><th>Browser</th><th>Severity</th><th>Field</th><th>Message</th><th>Migration value</th></tr></thead>
+      <thead><tr><th>Page</th><th>Browser</th><th>Severity</th><th>Field</th><th>Message</th><th>Migration value</th><th>Jira issue</th></tr></thead>
       <tbody>${summaryTableRows(summary.rows, "All metadata checks passed on migration pages.")}</tbody>
     </table>
   </section>`;
@@ -276,7 +350,7 @@ function renderBrokenLinksSummaryBox(results: PageReport[]): string {
       <span><strong>Total issues:</strong> ${summary.issueCount}</span>
     </div>
     <table>
-      <thead><tr><th>Page</th><th>Browser</th><th>Severity</th><th>Type</th><th>Message</th><th>URL</th></tr></thead>
+      <thead><tr><th>Page</th><th>Browser</th><th>Severity</th><th>Type</th><th>Message</th><th>URL</th><th>Jira issue</th></tr></thead>
       <tbody>${summary.rows.length ? summary.rows.map((row) => `<tr>
         <td>${escapeReportHtml(row.pageName)}</td>
         <td>${escapeReportHtml(row.browserName)}</td>
@@ -284,7 +358,8 @@ function renderBrokenLinksSummaryBox(results: PageReport[]): string {
         <td>${escapeReportHtml(row.field || "")}</td>
         <td>${escapeReportHtml(row.message)}</td>
         <td>${row.url ? `<a href="${escapeReportHtml(row.url)}">${escapeReportHtml(row.url)}</a>` : ""}</td>
-      </tr>`).join("") : `<tr><td colspan="6">No broken links detected.</td></tr>`}</tbody>
+        <td class="jira-action-cell">${renderJiraLinkForSummaryRow(row)}</td>
+      </tr>`).join("") : `<tr><td colspan="7">No broken links detected.</td></tr>`}</tbody>
     </table>
   </section>`;
 }
@@ -333,13 +408,6 @@ function isReportModuleEnabled(report: PageReport, moduleId: string): boolean {
   return getReportEnabledModuleIds(report).includes(moduleId);
 }
 
-function renderIssuesBody(report: PageReport): string {
-  return `<table>
-    <thead><tr><th>Severity</th><th>Category</th><th>Message</th><th>Prod value</th><th>Dev value</th></tr></thead>
-    <tbody>${issueRows(report.issues)}</tbody>
-  </table>`;
-}
-
 function renderReportDownloadBar(report: PageReport): string {
   const pdfName = report.reportPaths.pdf ? path.basename(report.reportPaths.pdf) : "index.pdf";
   const pdfHref = escapeReportHtml(pdfName);
@@ -370,6 +438,78 @@ function renderPageAccordions(report: PageReport): string {
             status,
             open: true,
             body: renderAllMetaTagsComparisonBody(report)
+          })
+        );
+        break;
+      case "schema":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Schema",
+            subtitle: "JSON-LD structured data comparison",
+            status,
+            open: false,
+            body: renderSchemaBody(report)
+          })
+        );
+        break;
+      case "embeds":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Iframe & embeds",
+            subtitle: "Iframe, embed, and embedded widget comparison",
+            status,
+            open: false,
+            body: renderEmbedsBody(report)
+          })
+        );
+        break;
+      case "devTechnologies":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Development technologies",
+            subtitle: "Frameworks, libraries, and front-end stack signals",
+            status,
+            open: false,
+            body: renderDevTechnologiesBody(report)
+          })
+        );
+        break;
+      case "programmingLanguages":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Programming languages",
+            subtitle: "Backend language markers and runtime hints",
+            status,
+            open: false,
+            body: renderProgrammingLanguagesBody(report)
+          })
+        );
+        break;
+      case "cms":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "CMS",
+            subtitle: "CMS platform and generator detection",
+            status,
+            open: false,
+            body: renderCmsBody(report)
+          })
+        );
+        break;
+      case "serverComparison":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Server comparison",
+            subtitle: "Server, hosting, and response header comparison",
+            status,
+            open: false,
+            body: renderServerComparisonBody(report)
           })
         );
         break;
@@ -486,19 +626,6 @@ function renderPageAccordions(report: PageReport): string {
     }
   }
 
-  if (report.issues.length) {
-    parts.push(
-      renderAccordion({
-        id: "all-issues",
-        title: "All issues",
-        subtitle: `${report.issues.length} issue(s) recorded`,
-        status: report.blockingIssues.length ? "FAIL" : report.warnings.length ? "WARNING" : "PASS",
-        open: false,
-        body: renderIssuesBody(report)
-      })
-    );
-  }
-
   return `<div class="report-accordions">${parts.join("")}</div>`;
 }
 
@@ -519,7 +646,12 @@ export async function writePageHtml(report: PageReport): Promise<void> {
         <img src="/sync-scope-logo.png" alt="Sync Scope" class="report-brand-logo">
         <span class="accordion-subtitle">Sync Scope report</span>
       </div>
-      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">Dark mode</button>
+      <div class="report-topbar-actions">
+        <a class="settings-link" href="/settings.html" aria-label="Settings" title="Settings">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7m7.43-2.75c.04-.32.07-.64.07-.97 0-.33-.03-.66-.07-1l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.2 7.2 0 0 0-1.73-1l-.38-2.65A.5.5 0 0 0 13 2h-4a.5.5 0 0 0-.49.42l-.38 2.65c-.62.25-1.2.58-1.73 1l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64L3.57 11c-.04.34-.07.67-.07 1 0 .33.03.65.07.97l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.13.22.39.3.6.22l2.49-1c.53.42 1.11.75 1.73 1l.38 2.65c.05.24.26.41.49.41h4c.23 0 .44-.17.49-.41l.38-2.65c.62-.25 1.2-.58 1.73-1l2.49 1c.22.09.47 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64z"/></svg>
+        </a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">Dark mode</button>
+      </div>
     </div>
     ${renderReportDownloadBar(report)}
     <header class="report-header">
@@ -534,6 +666,7 @@ export async function writePageHtml(report: PageReport): Promise<void> {
     </header>
     ${renderModuleScoreCards(report)}
     ${renderPageAccordions(report)}
+    ${renderIssuesPanel(report)}
   </div>
   <script>${pageReportDashboardScript}</script>
 </body>
@@ -607,7 +740,12 @@ export async function writeSummaryHtml(summary: SummaryReport): Promise<void> {
         <img src="/sync-scope-logo.png" alt="Sync Scope" class="report-brand-logo">
         <span class="accordion-subtitle">Sync Scope summary</span>
       </div>
-      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">Dark mode</button>
+      <div class="report-topbar-actions">
+        <a class="settings-link" href="/settings.html" aria-label="Settings" title="Settings">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7m7.43-2.75c.04-.32.07-.64.07-.97 0-.33-.03-.66-.07-1l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.2 7.2 0 0 0-1.73-1l-.38-2.65A.5.5 0 0 0 13 2h-4a.5.5 0 0 0-.49.42l-.38 2.65c-.62.25-1.2.58-1.73 1l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64L3.57 11c-.04.34-.07.67-.07 1 0 .33.03.65.07.97l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.13.22.39.3.6.22l2.49-1c.53.42 1.11.75 1.73 1l.38 2.65c.05.24.26.41.49.41h4c.23 0 .44-.17.49-.41l.38-2.65c.62-.25 1.2-.58 1.73-1l2.49 1c.22.09.47 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64z"/></svg>
+        </a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">Dark mode</button>
+      </div>
     </div>
 
     <header class="report-header">
@@ -622,6 +760,7 @@ export async function writeSummaryHtml(summary: SummaryReport): Promise<void> {
     </header>
 
     ${renderSummaryStatCards(summary)}
+    ${renderAllIssuesSummarySection(summary.results)}
     ${renderSummaryModuleScoreCards(summary.results)}
     ${renderMetadataSummaryBox(summary.results)}
     ${renderBrokenLinksSummaryBox(summary.results)}

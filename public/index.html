@@ -50,13 +50,15 @@
     }
 
     .app-header-inner {
-      max-width: 1280px;
-      margin: 0 auto;
-      padding: 5px;
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      padding: 5px 32px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
+      box-sizing: border-box;
     }
 
     .brand {
@@ -91,19 +93,56 @@
       border-radius: 999px;
     }
 
-    .dashboard {
-      max-width: 1280px;
-      margin: 0 auto;
-      padding: 28px 24px 64px;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      align-items: start;
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
     }
 
-    @media (max-width: 960px) {
+    .settings-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+
+    .settings-link:hover,
+    .settings-link.is-active {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .dashboard {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      padding: 28px 32px 64px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 24px;
+      align-items: start;
+      box-sizing: border-box;
+    }
+
+    .column-form,
+    .column-sidebar {
+      min-width: 0;
+      width: 100%;
+    }
+
+    @media (max-width: 900px) {
       .dashboard {
         grid-template-columns: 1fr;
+        padding: 24px 20px 48px;
       }
     }
 
@@ -572,6 +611,36 @@
       margin: 20px 0;
     }
 
+    .settings-section-title {
+      margin: 0 0 6px;
+      font-size: 1rem;
+    }
+
+    .settings-section-title-inner {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .settings-section-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .settings-section-desc {
+      margin: 0 0 16px;
+    }
+
+    .settings-card .module-load-wrap {
+      margin-bottom: 16px;
+    }
+
     .url-preview {
       background: var(--bg-elevated);
       border: 1px solid var(--border);
@@ -700,15 +769,54 @@
     }
 
     .module-option {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      padding: 10px 12px;
+      position: relative;
+      display: block;
+      padding: 12px 14px;
+      min-height: 74px;
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       background: var(--bg-elevated);
       cursor: pointer;
+      overflow: hidden;
       transition: border-color 0.15s, background 0.15s;
+    }
+
+    .module-option-bg-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      width: 54px;
+      height: 54px;
+      margin-top: -27px;
+      transform: rotate(45deg);
+      color: rgba(96, 165, 250, 0.2);
+      pointer-events: none;
+      z-index: 0;
+      transition: color 0.15s;
+    }
+
+    .module-option:has(input:checked) .module-option-bg-icon {
+      color: rgba(96, 165, 250, 0.34);
+    }
+
+    .module-option-bg-icon svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .module-option-content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .module-option-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     .module-option:hover {
@@ -722,29 +830,31 @@
     }
 
     .module-option input {
-      width: 18px;
-      height: 18px;
-      margin: 2px 0 0;
+      width: 16px;
+      height: 16px;
+      margin: 0;
       flex-shrink: 0;
       accent-color: var(--accent);
     }
 
-    .module-option-text {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 0;
-    }
-
-    .module-option-text strong {
-      font-size: 13px;
+    .module-option-header strong {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
       color: var(--text);
+      line-height: 1.2;
     }
 
-    .module-option-text span {
-      font-size: 11px;
+    .module-option-desc {
+      display: block;
+      padding-left: 24px;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
       color: var(--muted);
-      line-height: 1.4;
+      line-height: 1.35;
     }
   </style>
 </head>
@@ -757,7 +867,12 @@
           <p>Two pages. One layout. Same data — perfectly mirrored for instant comparison.</p>
         </div>
       </div>
-      <span class="badge">Desktop Chrome</span>
+      <div class="header-actions">
+        <a class="settings-link" href="/settings.html" aria-label="Settings" title="Settings">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7m7.43-2.75c.04-.32.07-.64.07-.97 0-.33-.03-.66-.07-1l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.2 7.2 0 0 0-1.73-1l-.38-2.65A.5.5 0 0 0 13 2h-4a.5.5 0 0 0-.49.42l-.38 2.65c-.62.25-1.2.58-1.73 1l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64L3.57 11c-.04.34-.07.67-.07 1 0 .33.03.65.07.97l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.13.22.39.3.6.22l2.49-1c.53.42 1.11.75 1.73 1l.38 2.65c.05.24.26.41.49.41h4c.23 0 .44-.17.49-.41l.38-2.65c.62-.25 1.2-.58 1.73-1l2.49 1c.22.09.47 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64z"/></svg>
+        </a>
+        <span class="badge">Desktop Chrome</span>
+      </div>
     </div>
   </header>
 
@@ -894,9 +1009,47 @@
     <aside class="column column-sidebar">
       <section class="card settings-card">
         <h2 class="card-title">Settings</h2>
-        <p class="card-desc">Configure the base URLs used to build live and migration page links from spreadsheet aliases.</p>
+        <p class="card-desc">Choose comparison modules first, then configure base URLs and migration access.</p>
 
         <form id="settings-form">
+          <h3 class="settings-section-title">
+            <span class="settings-section-title-inner">
+              <span class="settings-section-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M4 8h4V4H4zm6 12h4v-4h-4zm-6 0h4v-4H4zm0-6h4v-4H4zm6 0h4v-4h-4zm6 10h4v-4h-4zm0-6h4v-4h-4z"/></svg>
+              </span>
+              Comparison modules
+            </span>
+          </h3>
+          <p class="hint settings-section-desc">Choose which checks run and appear in reports. Saved with your other settings.</p>
+
+          <div class="module-load-wrap">
+            <div class="module-load-meta">
+              <strong>Run load</strong>
+              <span id="module-load-count">0 / 0 selected</span>
+            </div>
+            <div class="module-load-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="module-load-track">
+              <div class="module-load-bar" id="module-load-bar"></div>
+            </div>
+            <p class="hint module-load-hint">Green = light run · Red = heavier run with more modules.</p>
+          </div>
+
+          <div class="module-section-header">
+            <span class="hint" style="margin:0">Toggle each module</span>
+            <div class="module-actions">
+              <button type="button" class="secondary" id="modules-all-btn">All</button>
+              <button type="button" class="secondary" id="modules-none-btn">None</button>
+            </div>
+          </div>
+
+          <div id="module-grid" class="module-list">
+            <p class="module-list-empty">Loading modules…</p>
+          </div>
+
+          <div class="settings-divider"></div>
+
+          <h3 class="settings-section-title">URL settings</h3>
+          <p class="hint settings-section-desc">Base URLs used to build live and migration page links from spreadsheet aliases.</p>
+
           <label for="liveBaseUrl">Live URL</label>
           <input
             id="liveBaseUrl"
@@ -944,34 +1097,6 @@
             <button type="submit" class="primary" id="save-settings-btn">Save settings</button>
           </div>
         </form>
-      </section>
-
-      <section class="card modules-card">
-        <h2 class="card-title">Comparison modules</h2>
-        <p class="card-desc">Select which checks run and appear in the report.</p>
-
-        <div class="module-load-wrap">
-          <div class="module-load-meta">
-            <strong>Run load</strong>
-            <span id="module-load-count">0 / 0 selected</span>
-          </div>
-          <div class="module-load-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="module-load-track">
-            <div class="module-load-bar" id="module-load-bar"></div>
-          </div>
-          <p class="hint module-load-hint">Green = light run · Red = heavier run with more modules.</p>
-        </div>
-
-        <div class="module-section-header">
-          <span class="hint" style="margin:0">Toggle each module</span>
-          <div class="module-actions">
-            <button type="button" class="secondary" id="modules-all-btn">All</button>
-            <button type="button" class="secondary" id="modules-none-btn">None</button>
-          </div>
-        </div>
-
-        <div id="module-grid" class="module-list">
-          <p class="module-list-empty">Loading modules…</p>
-        </div>
       </section>
     </aside>
   </main>
@@ -1042,6 +1167,12 @@
     const MODULES_STORAGE_KEY = "migration-checker-enabled-modules";
     const DEFAULT_MODULES = [
       { id: "metadata", label: "Metadata", description: "Meta tags and SEO fields" },
+      { id: "schema", label: "Schema", description: "JSON-LD structured data comparison" },
+      { id: "embeds", label: "Iframe & embeds", description: "Iframe, embed, and embedded widget comparison" },
+      { id: "devTechnologies", label: "Development technologies", description: "Frameworks, libraries, and front-end stack signals" },
+      { id: "programmingLanguages", label: "Programming languages", description: "Backend language markers and runtime hints" },
+      { id: "cms", label: "CMS", description: "CMS platform and generator detection" },
+      { id: "serverComparison", label: "Server comparison", description: "Server, hosting, and response header comparison" },
       { id: "language", label: "Language", description: "HTML lang attribute" },
       { id: "brokenLinks", label: "Broken links", description: "HTTP status on internal links" },
       { id: "headings", label: "Headings", description: "Heading structure and text" },
@@ -1052,6 +1183,47 @@
       { id: "images", label: "Images", description: "Image sources and alt text" },
       { id: "visual", label: "Visual comparison", description: "Screenshots and pixel diff" }
     ];
+
+    const MODULE_ICONS = {
+      metadata:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42M5.5 7A1.5 1.5 0 1 1 4 5.5 1.5 1.5 0 0 1 5.5 7"/></svg>',
+      schema:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6z"/></svg>',
+      embeds:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2m0 16H5V5h14zM8 8h8v8H8z"/></svg>',
+      devTechnologies:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6z"/></svg>',
+      programmingLanguages:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 3a2 2 0 0 0-2 2v4h2V5h10v14H8v-4H6v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm1 6v2h8v-2zm0 4v2h5v-2z"/></svg>',
+      cms:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 4h16v2H4zm0 5h10v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>',
+      serverComparison:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 1h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2m0 8h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2m0 8h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2"/></svg>',
+      language:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5.03c1.5 1.23 3.17 2.18 4.97 2.79V22h2v-4.07c1.87-.37 3.6-1.16 5.13-2.23l2.25 2.25 1.27-1.27-12.8-12.81z"/></svg>',
+      brokenLinks:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17 7h-4v2h4c1.65 0 3 1.35 3 3s-1.35 3-3 3h-4v2h4c2.76 0 5-2.24 5-5s-2.24-5-5-5m-6 10H7c-1.65 0-3-1.35-3-3s1.35-3 3-3h4V9H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4zm-3-4h8v2H8z"/></svg>',
+      headings:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 4v3h5.5v12h3V7H19V4z"/></svg>',
+      hTagHierarchy:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 13h2v-2H3v2m0 4h2v-2H3v2m0-8h2V7H3v2m4 4h14v-2H7v2m0 4h14v-2H7v2M7 7v2h14V7H7"/></svg>',
+      textStyle:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 4v3h5.5v12h3V7H19V4zm8 8h9v2h-9zm0 4h6v2h-6z"/></svg>',
+      pageSpeed:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>',
+      content:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zm2 16H8v-2h8zm0-4H8v-2h8zm-3-5V3.5L18.5 9z"/></svg>',
+      images:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2M8.5 13.5l2.5 3.01L14.5 12l4.5 6H5z"/></svg>',
+      visual:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5M12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5m0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6"/></svg>',
+      default:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 8h4V4H4zm6 12h4v-4h-4zm-6 0h4v-4H4zm0-6h4v-4H4zm6 0h4v-4h-4zm6 10h4v-4h-4zm0-6h4v-4h-4z"/></svg>'
+    };
+
+    function renderModuleIcon(moduleId) {
+      return MODULE_ICONS[moduleId] || MODULE_ICONS.default;
+    }
 
     let eventSource = null;
     let runPollTimer = null;
@@ -1529,11 +1701,6 @@
     }
 
     function saveModuleSelection() {
-      try {
-        localStorage.setItem(MODULES_STORAGE_KEY, JSON.stringify(getSelectedModuleIds()));
-      } catch {
-        // Ignore storage errors.
-      }
       updateModuleLoadBar();
     }
 
@@ -1545,26 +1712,23 @@
       });
     }
 
-    function renderModuleOptions(modules) {
+    function renderModuleOptions(modules, savedIds) {
       moduleGrid.innerHTML = modules
         .map(
           (module) => `<label class="module-option">
-            <input type="checkbox" name="enabledModules" value="${escapeHtml(module.id)}" checked>
-            <span class="module-option-text">
-              <strong>${escapeHtml(module.label)}</strong>
-              <span>${escapeHtml(module.description)}</span>
+            <span class="module-option-bg-icon" aria-hidden="true">${renderModuleIcon(module.id)}</span>
+            <span class="module-option-content">
+              <span class="module-option-header">
+                <input type="checkbox" name="enabledModules" value="${escapeHtml(module.id)}" checked>
+                <strong>${escapeHtml(module.label)}</strong>
+              </span>
+              <span class="module-option-desc">${escapeHtml(module.description)}</span>
             </span>
           </label>`
         )
         .join("");
 
-      let savedIds = [];
-      try {
-        savedIds = JSON.parse(localStorage.getItem(MODULES_STORAGE_KEY) || "[]");
-      } catch {
-        savedIds = [];
-      }
-      restoreModuleSelection(Array.isArray(savedIds) ? savedIds : []);
+      restoreModuleSelection(savedIds);
 
       moduleGrid.querySelectorAll('input[name="enabledModules"]').forEach((input) => {
         input.addEventListener("change", saveModuleSelection);
@@ -1573,14 +1737,14 @@
       updateModuleLoadBar();
     }
 
-    async function loadModules() {
+    async function loadModules(savedIds) {
       try {
         const response = await fetch("/api/modules");
         if (!response.ok) throw new Error("Modules API unavailable");
         const data = await response.json();
-        renderModuleOptions(data.modules?.length ? data.modules : DEFAULT_MODULES);
+        renderModuleOptions(data.modules?.length ? data.modules : DEFAULT_MODULES, savedIds);
       } catch {
-        renderModuleOptions(DEFAULT_MODULES);
+        renderModuleOptions(DEFAULT_MODULES, savedIds);
       }
     }
 
@@ -1754,6 +1918,7 @@
     }
 
     async function loadSettings() {
+      let savedModuleIds = [];
       try {
         const response = await fetch("/api/settings");
         if (!response.ok) return;
@@ -1761,15 +1926,35 @@
         liveBaseUrlInput.value = data.liveBaseUrl || "";
         migrationBaseUrlInput.value = data.migrationBaseUrl || "";
         migrationPasswordInput.value = data.migrationPassword || "";
+        savedModuleIds = Array.isArray(data.enabledModules) ? data.enabledModules : [];
         updateUrlPreviews();
       } catch {
         updateUrlPreviews();
       }
+
+      if (!savedModuleIds.length) {
+        try {
+          const legacyIds = JSON.parse(localStorage.getItem(MODULES_STORAGE_KEY) || "[]");
+          if (Array.isArray(legacyIds) && legacyIds.length) {
+            savedModuleIds = legacyIds;
+          }
+        } catch {
+          // Ignore invalid legacy module storage.
+        }
+      }
+
+      await loadModules(savedModuleIds);
     }
 
     settingsForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       hideMessage(settingsMessage);
+
+      const selectedModules = getSelectedModuleIds();
+      if (!selectedModules.length) {
+        showMessage(settingsMessage, "Select at least one comparison module.", "error");
+        return;
+      }
 
       try {
         const response = await fetch("/api/settings", {
@@ -1778,7 +1963,8 @@
           body: JSON.stringify({
             liveBaseUrl: liveBaseUrlInput.value.trim(),
             migrationBaseUrl: migrationBaseUrlInput.value.trim(),
-            migrationPassword: migrationPasswordInput.value
+            migrationPassword: migrationPasswordInput.value,
+            enabledModules: getSelectedModuleIds()
           })
         });
         const data = await response.json();
@@ -1787,6 +1973,15 @@
         liveBaseUrlInput.value = data.liveBaseUrl;
         migrationBaseUrlInput.value = data.migrationBaseUrl;
         migrationPasswordInput.value = data.migrationPassword || "";
+        if (Array.isArray(data.enabledModules)) {
+          restoreModuleSelection(data.enabledModules);
+          updateModuleLoadBar();
+        }
+        try {
+          localStorage.removeItem(MODULES_STORAGE_KEY);
+        } catch {
+          // Ignore storage errors.
+        }
         updateUrlPreviews();
         showMessage(settingsMessage, "Settings saved.", "success");
       } catch (error) {
@@ -1887,9 +2082,7 @@
     }
 
     setSource("single");
-    renderModuleOptions(DEFAULT_MODULES);
     void loadSettings();
-    void loadModules();
     void loadRecentRuns();
     void reconnectActiveRun();
   </script>

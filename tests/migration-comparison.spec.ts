@@ -12,6 +12,7 @@ import {
   waitForProdPageContent
 } from "../src/browserContext";
 import { config } from "../src/config";
+import { loadPersistedSettings } from "../src/baseUrls";
 import {
   isModuleEnabled,
   normalizeEnabledModuleIds,
@@ -25,6 +26,14 @@ import { checkBrokenLinks } from "../src/comparators/linkComparator";
 import { compareMetadata } from "../src/comparators/metadataComparator";
 import { compareLanguage } from "../src/comparators/navigationComparator";
 import { comparePageSpeed } from "../src/comparators/pageSpeedComparator";
+import { compareEmbeds } from "../src/comparators/embedComparator";
+import {
+  compareCms,
+  compareDevTechnologies,
+  compareProgrammingLanguages,
+  compareServerStack
+} from "../src/comparators/techStackComparator";
+import { compareSchema } from "../src/comparators/schemaComparator";
 import { compareTextStyles } from "../src/comparators/textStyleComparator";
 import { compareScreenshots } from "../src/comparators/visualComparator";
 import { extractContent } from "../src/extractors/contentExtractor";
@@ -34,6 +43,9 @@ import { extractLanguage } from "../src/extractors/languageExtractor";
 import { extractLinks } from "../src/extractors/linkExtractor";
 import { extractMetadata, Metadata } from "../src/extractors/metadataExtractor";
 import { extractPageSpeed } from "../src/extractors/pageSpeedExtractor";
+import { extractEmbeds, emptyEmbedData } from "../src/extractors/embedExtractor";
+import { extractTechStack, emptyTechStackData } from "../src/extractors/techStackExtractor";
+import { extractSchema, emptySchemaData } from "../src/extractors/schemaExtractor";
 import { extractTextStyles } from "../src/extractors/textStyleExtractor";
 import { readPageMappingsFromFile, resolveSpreadsheetPath } from "../src/readExcel";
 import { resolveReportPageDir } from "../src/urlMapper";
@@ -52,6 +64,7 @@ type Source = "prod" | "dev";
 
 interface CaptureState {
   networkIssues: Issue[];
+  documentHeaders: Record<string, string>;
 }
 
 interface ExtractedPage {
@@ -63,6 +76,9 @@ interface ExtractedPage {
   images: Awaited<ReturnType<typeof extractImages>>;
   links: Awaited<ReturnType<typeof extractLinks>>;
   language: Awaited<ReturnType<typeof extractLanguage>>;
+  schema: Awaited<ReturnType<typeof extractSchema>>;
+  embeds: Awaited<ReturnType<typeof extractEmbeds>>;
+  techStack: Awaited<ReturnType<typeof extractTechStack>>;
   capture: CaptureState;
 }
 
@@ -114,8 +130,16 @@ function categoryFromIssues(category: string, issues: Issue[]): CategoryResult {
   return statusFromIssues(issues, `${category} checks pass`);
 }
 
-function attachIssueCapture(page: Page, source: Source): CaptureState {
-  const capture: CaptureState = { networkIssues: [] };
+function attachIssueCapture(page: Page, source: Source, pageUrl: string): CaptureState {
+  const capture: CaptureState = { networkIssues: [], documentHeaders: {} };
+  const targetUrl = pageUrl.split("#")[0];
+
+  page.on("response", (response) => {
+    if (response.request().resourceType() !== "document") return;
+    const responseUrl = response.url().split("#")[0];
+    if (responseUrl !== targetUrl && !responseUrl.startsWith(`${targetUrl}/`)) return;
+    capture.documentHeaders = { ...capture.documentHeaders, ...response.headers() };
+  });
 
   page.on("requestfailed", (request) => {
     capture.networkIssues.push({
@@ -208,7 +232,7 @@ async function loadProdPage(page: Page, url: string, capture: CaptureState): Pro
 }
 
 async function loadAndExtract(page: Page, url: string, source: Source): Promise<ExtractedPage> {
-  const capture = attachIssueCapture(page, source);
+  const capture = attachIssueCapture(page, source, url);
   const loadStartedAt = Date.now();
 
   if (source === "prod") {
@@ -260,14 +284,24 @@ async function loadAndExtract(page: Page, url: string, source: Source): Promise<
       };
 
   const needHeadings = moduleEnabled("headings") || moduleEnabled("hTagHierarchy");
-  const [metadata, headings, textStyles, content, images, links, language] = await Promise.all([
+  const needTechStack =
+    moduleEnabled("devTechnologies") ||
+    moduleEnabled("programmingLanguages") ||
+    moduleEnabled("cms") ||
+    moduleEnabled("serverComparison");
+
+  const [metadata, headings, textStyles, content, images, links, language, schema, embeds, techStack] =
+    await Promise.all([
     moduleEnabled("metadata") ? extractMetadata(page) : Promise.resolve(emptyMetadata),
     needHeadings ? extractHeadings(page) : Promise.resolve([]),
     moduleEnabled("textStyle") ? extractTextStyles(page) : Promise.resolve([]),
     moduleEnabled("content") ? extractContent(page) : Promise.resolve({ text: "", length: 0 }),
     moduleEnabled("images") ? extractImages(page) : Promise.resolve([]),
     moduleEnabled("brokenLinks") ? extractLinks(page) : Promise.resolve([]),
-    moduleEnabled("language") ? extractLanguage(page) : Promise.resolve({ htmlLang: "", hreflang: [], placeholders: [] })
+    moduleEnabled("language") ? extractLanguage(page) : Promise.resolve({ htmlLang: "", hreflang: [], placeholders: [] }),
+    moduleEnabled("schema") ? extractSchema(page) : Promise.resolve(emptySchemaData()),
+    moduleEnabled("embeds") ? extractEmbeds(page) : Promise.resolve(emptyEmbedData()),
+    needTechStack ? extractTechStack(page, capture.documentHeaders) : Promise.resolve(emptyTechStackData())
   ]);
 
   return {
@@ -279,6 +313,9 @@ async function loadAndExtract(page: Page, url: string, source: Source): Promise<
     images,
     links,
     language,
+    schema,
+    embeds,
+    techStack,
     capture
   };
 }
@@ -310,6 +347,8 @@ function buildSummary(results: PageReport[]): SummaryReport {
 }
 
 test.beforeAll(async () => {
+  await loadPersistedSettings();
+
   if (!pageMappings.length) {
     throw new Error("No page mappings loaded. Check the selected sheet and spreadsheet columns.");
   }
@@ -396,6 +435,24 @@ for (const [index, mapping] of pageMappings.entries()) {
 
       if (moduleEnabled("metadata")) {
         categories.metadata = compareMetadata(prodData.metadata, devData.metadata);
+      }
+      if (moduleEnabled("schema")) {
+        categories.schema = compareSchema(prodData.schema, devData.schema);
+      }
+      if (moduleEnabled("embeds")) {
+        categories.embeds = compareEmbeds(prodData.embeds, devData.embeds);
+      }
+      if (moduleEnabled("devTechnologies")) {
+        categories.devTechnologies = compareDevTechnologies(prodData.techStack, devData.techStack);
+      }
+      if (moduleEnabled("programmingLanguages")) {
+        categories.programmingLanguages = compareProgrammingLanguages(prodData.techStack, devData.techStack);
+      }
+      if (moduleEnabled("cms")) {
+        categories.cms = compareCms(prodData.techStack, devData.techStack);
+      }
+      if (moduleEnabled("serverComparison")) {
+        categories.serverComparison = compareServerStack(prodData.techStack, devData.techStack);
       }
       if (moduleEnabled("headings")) {
         categories.headings = compareHeadings(prodData.headings, devData.headings);

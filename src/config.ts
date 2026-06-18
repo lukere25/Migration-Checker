@@ -4,6 +4,9 @@ export const config = {
   prodBaseUrl: process.env.PROD_BASE_URL || "https://www.netapp.com",
   devBaseUrl: process.env.DEV_BASE_URL || "https://netapp-e25migration.vercel.app",
   devPassword: process.env.DEV_PASSWORD || "T2'U,0_(pl69",
+  jiraAtlassianDomain: process.env.JIRA_ATLASSIAN_DOMAIN || "",
+  jiraProjectId: process.env.JIRA_PROJECT_ID || "",
+  jiraIssueTypeId: process.env.JIRA_ISSUE_TYPE_ID || "",
   /** CLI fallback only — UI runs always pass EXCEL_PATH to the uploaded file. */
   excelPath: "Copy of Netapp - QA Regression.xlsx",
   reportsDir: process.env.REPORTS_DIR || "reports",
