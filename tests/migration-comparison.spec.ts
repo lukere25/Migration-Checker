@@ -11,6 +11,7 @@ import {
   newProdContext,
   waitForProdPageContent
 } from "../src/browserContext";
+import { closePageOverlays, shouldCloseOverlaysBeforeCompare } from "../src/pageOverlays";
 import { config } from "../src/config";
 import { loadPersistedSettings } from "../src/baseUrls";
 import {
@@ -174,24 +175,9 @@ function attachIssueCapture(page: Page, source: Source, pageUrl: string): Captur
   return capture;
 }
 
-async function closeCookieBanners(page: Page): Promise<void> {
-  const selectors = [
-    'button:has-text("Accept")',
-    'button:has-text("Accept all")',
-    'button:has-text("Agree")',
-    'button:has-text("I agree")',
-    'button:has-text("Got it")',
-    '[aria-label*="accept" i]'
-  ];
-
-  for (const selector of selectors) {
-    const button = page.locator(selector).first();
-    if (await button.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await button.click({ timeout: 2000 }).catch(() => undefined);
-      await page.waitForTimeout(500).catch(() => undefined);
-      break;
-    }
-  }
+async function dismissPageOverlays(page: Page): Promise<void> {
+  if (!shouldCloseOverlaysBeforeCompare()) return;
+  await closePageOverlays(page);
 }
 
 async function unlockDevPasswordGate(page: Page): Promise<void> {
@@ -248,7 +234,7 @@ async function loadProdPage(page: Page, url: string, capture: CaptureState): Pro
   }
 
   await waitForProdPageContent(page);
-  await closeCookieBanners(page);
+  await dismissPageOverlays(page);
 }
 
 async function loadAndExtract(page: Page, url: string, source: Source): Promise<ExtractedPage> {
@@ -286,7 +272,7 @@ async function loadAndExtract(page: Page, url: string, source: Source): Promise<
     }
 
     await page.waitForTimeout(300);
-    await closeCookieBanners(page);
+    await dismissPageOverlays(page);
   }
 
   if (moduleEnabled("pageSpeed")) {
@@ -363,7 +349,9 @@ function buildSummary(results: PageReport[]): SummaryReport {
 }
 
 test.beforeAll(async () => {
-  await loadPersistedSettings();
+  if (process.env.AUTH_ALREADY_DONE !== "true") {
+    await loadPersistedSettings();
+  }
 
   if (!pageMappings.length) {
     throw new Error("No page mappings loaded. Check the selected sheet and spreadsheet columns.");
@@ -372,8 +360,13 @@ test.beforeAll(async () => {
   await ensureDir(config.reportsDir);
   logger.info(`Loaded ${pageMappings.length} page(s) for comparison`);
   if (process.env.AUTH_ALREADY_DONE === "true") {
-    devStorageState = config.authStoragePath;
-    logger.info("Using migration auth from run setup");
+    devStorageState = path.resolve(process.env.AUTH_STORAGE_PATH || config.authStoragePath);
+    if (!(await fs.pathExists(devStorageState))) {
+      logger.warn("Migration auth storage missing after run setup; re-authenticating...");
+      devStorageState = await ensureDevStorageState();
+    } else {
+      logger.info("Using migration auth from run setup");
+    }
   } else {
     logger.info("Ensuring migration site authentication...");
     devStorageState = await ensureDevStorageState();

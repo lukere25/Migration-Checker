@@ -259,6 +259,24 @@
       color: var(--accent);
       word-break: break-all;
     }
+
+    .checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 0 0 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .checkbox-row input {
+      width: 18px;
+      height: 18px;
+      margin: 2px 0 0;
+      flex: 0 0 18px;
+      accent-color: var(--accent);
+    }
   </style>
 </head>
 <body>
@@ -281,6 +299,29 @@
   </header>
 
   <main>
+    <section class="card">
+      <h2 class="card-title">Page comparison</h2>
+      <p class="card-desc">Options applied before each live and migration page is captured.</p>
+
+      <form id="comparison-settings-form">
+        <label class="checkbox-row" for="closeOverlaysBeforeCompare">
+          <input
+            type="checkbox"
+            id="closeOverlaysBeforeCompare"
+            name="closeOverlaysBeforeCompare"
+            checked
+          >
+          <span>Close cookie banners and tooltips before compare</span>
+        </label>
+        <p class="hint">Attempts to dismiss cookie consent, promo modals, chat widgets, and other overlays that block page content.</p>
+
+        <div class="actions">
+          <button type="submit" class="primary">Save comparison settings</button>
+        </div>
+        <div id="comparison-message" class="message hidden"></div>
+      </form>
+    </section>
+
     <section class="card">
       <h2 class="card-title">Jira</h2>
       <p class="card-desc">Used by <strong>Open Jira</strong> buttons in reports. Opens Jira with the issue title and description prefilled — you choose project and issue type in Jira.</p>
@@ -340,6 +381,9 @@
   </main>
 
   <script>
+    const comparisonForm = document.getElementById("comparison-settings-form");
+    const closeOverlaysInput = document.getElementById("closeOverlaysBeforeCompare");
+    const comparisonMessageEl = document.getElementById("comparison-message");
     const form = document.getElementById("jira-settings-form");
     const projectUrlInput = document.getElementById("jiraProjectUrl");
     const domainInput = document.getElementById("jiraAtlassianDomain");
@@ -412,6 +456,12 @@
       previewEl.textContent = "https://" + host + "/secure/CreateIssueDetails!init.jspa?" + params.toString();
     }
 
+    function showComparisonMessage(text, type) {
+      comparisonMessageEl.textContent = text;
+      comparisonMessageEl.className = "message " + type;
+      comparisonMessageEl.classList.remove("hidden");
+    }
+
     function showMessage(text, type) {
       messageEl.textContent = text;
       messageEl.className = "message " + type;
@@ -441,6 +491,7 @@
         const response = await fetch("/api/settings");
         if (!response.ok) return;
         const data = await response.json();
+        closeOverlaysInput.checked = data.closeOverlaysBeforeCompare !== false;
         domainInput.value = data.jiraAtlassianDomain || "";
         projectInput.value = data.jiraProjectId || "";
         updateLookupPanel();
@@ -449,6 +500,28 @@
         updatePreview();
       }
     }
+
+    comparisonForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      comparisonMessageEl.classList.add("hidden");
+
+      try {
+        const response = await fetch("/api/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            closeOverlaysBeforeCompare: closeOverlaysInput.checked
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not save comparison settings");
+
+        closeOverlaysInput.checked = data.closeOverlaysBeforeCompare !== false;
+        showComparisonMessage("Comparison settings saved.", "success");
+      } catch (error) {
+        showComparisonMessage(error.message, "error");
+      }
+    });
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();

@@ -15,6 +15,7 @@ export interface AppSettings {
   jiraProjectId: string;
   jiraIssueTypeId: string;
   enabledModules: string[];
+  closeOverlaysBeforeCompare: boolean;
 }
 
 export const defaultAppSettings: AppSettings = {
@@ -24,7 +25,8 @@ export const defaultAppSettings: AppSettings = {
   jiraAtlassianDomain: "",
   jiraProjectId: "",
   jiraIssueTypeId: "",
-  enabledModules: [...DEFAULT_ENABLED_MODULE_IDS]
+  enabledModules: [...DEFAULT_ENABLED_MODULE_IDS],
+  closeOverlaysBeforeCompare: true
 };
 
 let savedEnabledModules = [...DEFAULT_ENABLED_MODULE_IDS];
@@ -47,8 +49,13 @@ export function getAppSettings(): AppSettings {
     jiraAtlassianDomain: config.jiraAtlassianDomain,
     jiraProjectId: config.jiraProjectId,
     jiraIssueTypeId: config.jiraIssueTypeId,
-    enabledModules: [...savedEnabledModules]
+    enabledModules: [...savedEnabledModules],
+    closeOverlaysBeforeCompare: config.closeOverlaysBeforeCompare
   };
+}
+
+export function applyCloseOverlaysBeforeCompare(enabled: boolean): void {
+  config.closeOverlaysBeforeCompare = enabled;
 }
 
 export function applyEnabledModules(ids: string[] | undefined): string[] {
@@ -102,7 +109,7 @@ export async function loadPersistedSettings(): Promise<void> {
       });
     }
     if (typeof saved?.migrationPassword === "string" && saved.migrationPassword.trim()) {
-      applyMigrationPassword(String(saved.migrationPassword));
+      config.devPassword = String(saved.migrationPassword).trim();
     }
     if (
       saved?.jiraAtlassianDomain !== undefined ||
@@ -116,6 +123,9 @@ export async function loadPersistedSettings(): Promise<void> {
     }
     if (Array.isArray(saved?.enabledModules)) {
       applyEnabledModules(saved.enabledModules.map(String));
+    }
+    if (saved?.closeOverlaysBeforeCompare !== undefined) {
+      applyCloseOverlaysBeforeCompare(Boolean(saved.closeOverlaysBeforeCompare));
     }
   } catch {
     // Ignore invalid persisted settings.
@@ -150,6 +160,10 @@ export async function saveAppSettings(settings: Partial<AppSettings>): Promise<A
 
   if (settings.enabledModules !== undefined) {
     applyEnabledModules(settings.enabledModules);
+  }
+
+  if (settings.closeOverlaysBeforeCompare !== undefined) {
+    applyCloseOverlaysBeforeCompare(Boolean(settings.closeOverlaysBeforeCompare));
   }
 
   const normalized = getAppSettings();

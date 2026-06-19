@@ -11,8 +11,8 @@ import {
 import { ensureDevStorageState } from "./auth";
 import { config } from "./config";
 import { normalizeEnabledModuleIds, serializeEnabledModules } from "./comparisonModules";
-import { createPageMapping } from "./urlMapper";
-import { writeSinglePageSpreadsheet } from "./singlePage";
+import { writeSinglePageSpreadsheet, previewSinglePageMapping, SinglePageInput } from "./singlePage";
+import { pathLabelForMapping } from "./urlMapper";
 import { logger } from "./utils/logger";
 
 delete process.env.SHEET_NAME;
@@ -349,6 +349,8 @@ export async function startRun(options: {
   uploadedFilePath?: string;
   uploadedFileName?: string;
   pageAlias?: string;
+  livePageUrl?: string;
+  migrationPageUrl?: string;
   maxPages?: number;
   headless?: boolean;
   enabledModules?: string[];
@@ -366,10 +368,16 @@ export async function startRun(options: {
 
   const hasUrl = Boolean(options.spreadsheetUrl?.trim());
   const hasUpload = Boolean(options.uploadedFilePath);
-  const hasSinglePage = Boolean(options.pageAlias?.trim());
+  const hasSamePath = Boolean(options.pageAlias?.trim());
+  const hasDifferentUrls = Boolean(options.livePageUrl?.trim() && options.migrationPageUrl?.trim());
+  const hasSinglePage = hasSamePath || hasDifferentUrls;
 
   if (!hasUrl && !hasUpload && !hasSinglePage) {
     throw new Error("Upload a spreadsheet or enter a page path");
+  }
+
+  if ((options.livePageUrl?.trim() || options.migrationPageUrl?.trim()) && !hasDifferentUrls) {
+    throw new Error("Enter both a live page URL/path and a migration page URL/path.");
   }
 
   const id = createRunId();
@@ -381,9 +389,11 @@ export async function startRun(options: {
     id,
     spreadsheetSource: hasUpload
       ? options.uploadedFileName || path.basename(options.uploadedFilePath!)
-      : hasSinglePage
-        ? options.pageAlias!.trim()
-        : options.spreadsheetUrl!.trim(),
+      : hasDifferentUrls
+        ? `${options.livePageUrl!.trim()} → ${options.migrationPageUrl!.trim()}`
+        : hasSinglePage
+          ? options.pageAlias!.trim()
+          : options.spreadsheetUrl!.trim(),
     maxPages: hasSinglePage ? 1 : options.maxPages,
     startIndex: 1,
     headless: options.headless ?? true,
@@ -400,14 +410,16 @@ export async function startRun(options: {
   activeJobId = id;
   void executeJob(job, {
     spreadsheetUrl: hasUrl ? options.spreadsheetUrl!.trim() : undefined,
-    pageAlias: hasSinglePage ? options.pageAlias!.trim() : undefined
+    pageAlias: hasSamePath ? options.pageAlias!.trim() : undefined,
+    livePageUrl: hasDifferentUrls ? options.livePageUrl!.trim() : undefined,
+    migrationPageUrl: hasDifferentUrls ? options.migrationPageUrl!.trim() : undefined
   });
   return job;
 }
 
 async function prepareSpreadsheet(
   job: RunJob,
-  sources: { spreadsheetUrl?: string; pageAlias?: string }
+  sources: { spreadsheetUrl?: string; pageAlias?: string; livePageUrl?: string; migrationPageUrl?: string }
 ): Promise<void> {
   await fs.ensureDir(path.dirname(job.spreadsheetPath));
 
@@ -420,10 +432,21 @@ async function prepareSpreadsheet(
     return;
   }
 
-  if (sources.pageAlias) {
+  if (sources.pageAlias || (sources.livePageUrl && sources.migrationPageUrl)) {
     job.status = "downloading";
-    appendLog(job, `Single URL mode: preparing check for ${sources.pageAlias}`);
-    await writeSinglePageSpreadsheet(job.spreadsheetPath, sources.pageAlias);
+    if (sources.livePageUrl && sources.migrationPageUrl) {
+      appendLog(
+        job,
+        `Single URL mode: comparing live ${sources.livePageUrl} with migration ${sources.migrationPageUrl}`
+      );
+    } else {
+      appendLog(job, `Single URL mode: preparing check for ${sources.pageAlias}`);
+    }
+    await writeSinglePageSpreadsheet(job.spreadsheetPath, {
+      pageAlias: sources.pageAlias,
+      livePageUrl: sources.livePageUrl,
+      migrationPageUrl: sources.migrationPageUrl
+    });
     appendLog(job, "Single page ready for comparison");
     return;
   }
@@ -436,7 +459,7 @@ async function prepareSpreadsheet(
 
 async function executeJob(
   job: RunJob,
-  sources: { spreadsheetUrl?: string; pageAlias?: string }
+  sources: { spreadsheetUrl?: string; pageAlias?: string; livePageUrl?: string; migrationPageUrl?: string }
 ): Promise<void> {
   executingJobs.add(job.id);
   try {
@@ -470,6 +493,12 @@ async function executeJob(
     process.env.PLAYWRIGHT_HEADLESS = job.headless ? "true" : "false";
     process.env.DEV_PASSWORD = config.devPassword;
     await ensureDevStorageState();
+    const authPath = path.resolve(config.authStoragePath);
+    if (!(await fs.pathExists(authPath))) {
+      throw new Error(
+        "Migration authentication failed — storage state was not saved. Check the migration password in Settings."
+      );
+    }
     appendLog(job, "Migration authentication ready");
 
     await fs.ensureDir(job.reportsDir);
@@ -636,8 +665,10 @@ function buildRunEnv(job: RunJob): NodeJS.ProcessEnv {
   env.JIRA_ISSUE_TYPE_ID = config.jiraIssueTypeId;
   env.ENABLED_MODULES = serializeEnabledModules(job.enabledModules);
   env.AUTH_ALREADY_DONE = "true";
+  env.AUTH_STORAGE_PATH = path.resolve(config.authStoragePath);
   env.GENERATE_PDF = config.generatePdf ? "true" : "false";
   env.FAST_VISUAL = config.fastVisual ? "true" : "false";
+  env.CLOSE_OVERLAYS_BEFORE_COMPARE = config.closeOverlaysBeforeCompare ? "true" : "false";
   if (job.progressFilePath) {
     env.RUN_PROGRESS_FILE = job.progressFilePath;
   }
@@ -737,6 +768,7 @@ async function previewFromPath(
     samplePages: mappings.slice(0, 5).map((mapping) => ({
       pageName: mapping.pageName,
       path: mapping.path,
+      pathLabel: pathLabelForMapping(mapping),
       liveUrl: mapping.prodUrl,
       migrationUrl: mapping.devUrl
     }))
@@ -752,16 +784,14 @@ export interface SpreadsheetPreview {
   samplePages: Array<{
     pageName: string;
     path: string;
+    pathLabel?: string;
     liveUrl: string;
     migrationUrl: string;
   }>;
 }
 
-function previewSinglePage(pageAlias: string): SpreadsheetPreview {
-  const mapping = createPageMapping({ path: pageAlias });
-  if (!mapping) {
-    throw new Error(`Invalid page path or URL: "${pageAlias}"`);
-  }
+function previewSinglePage(input: SinglePageInput): SpreadsheetPreview {
+  const mapping = previewSinglePageMapping(input);
 
   return {
     pageCount: 1,
@@ -773,6 +803,7 @@ function previewSinglePage(pageAlias: string): SpreadsheetPreview {
       {
         pageName: mapping.pageName,
         path: mapping.path,
+        pathLabel: pathLabelForMapping(mapping),
         liveUrl: mapping.prodUrl,
         migrationUrl: mapping.devUrl
       }
@@ -784,9 +815,18 @@ export async function previewSpreadsheet(options: {
   spreadsheetUrl?: string;
   spreadsheetPath?: string;
   pageAlias?: string;
+  livePageUrl?: string;
+  migrationPageUrl?: string;
 }): Promise<SpreadsheetPreview> {
-  if (options.pageAlias?.trim()) {
-    return previewSinglePage(options.pageAlias.trim());
+  const hasSamePath = Boolean(options.pageAlias?.trim());
+  const hasDifferentUrls = Boolean(options.livePageUrl?.trim() && options.migrationPageUrl?.trim());
+
+  if (hasSamePath || hasDifferentUrls) {
+    return previewSinglePage({
+      pageAlias: options.pageAlias?.trim(),
+      livePageUrl: options.livePageUrl?.trim(),
+      migrationPageUrl: options.migrationPageUrl?.trim()
+    });
   }
 
   if (options.spreadsheetPath) {

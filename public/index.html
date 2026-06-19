@@ -880,12 +880,13 @@
     <div class="column column-form">
       <section class="card">
         <h2 class="card-title">Run comparison</h2>
-        <p class="card-desc">Check a single page path or upload a spreadsheet of URL aliases. Each alias is expanded using your Live and Migration base URLs from Settings.</p>
+        <p class="card-desc">Compare one page path, two different URLs, or upload a spreadsheet for bulk checks.</p>
 
         <form id="run-form">
           <div class="source-tabs" role="tablist">
             <button type="button" class="active" data-source="single" role="tab" aria-selected="true">Single URL</button>
             <button type="button" data-source="upload" role="tab" aria-selected="false">Upload file</button>
+            <button type="button" data-source="different" role="tab" aria-selected="false">Different URL</button>
           </div>
 
           <div id="source-single" class="source-panel">
@@ -904,7 +905,7 @@
               <dt>Resolved migration page</dt>
               <dd id="single-migration-preview">—</dd>
             </dl>
-            <p class="hint">Enter a path like <code>/</code> or <code>/artificial-intelligence/</code>, or paste a full page URL — the path is extracted automatically. The comparison may take 30–90 seconds.</p>
+            <p class="hint">Same path on both sites — expanded using your base URLs from Settings.</p>
           </div>
 
           <div id="source-upload" class="source-panel hidden">
@@ -914,6 +915,36 @@
             </div>
             <p id="selected-file" class="selected-file">No file selected.</p>
             <p class="hint">Upload a local <code>.xlsx</code> or <code>.xls</code> workbook.</p>
+          </div>
+
+          <div id="source-different" class="source-panel hidden">
+            <label for="livePageUrl">Live page URL or path</label>
+            <input
+              id="livePageUrl"
+              name="livePageUrl"
+              type="text"
+              class="text-field"
+              placeholder="/old-page/ or https://www.example.com/old-page/"
+              autocomplete="off"
+            >
+
+            <label for="migrationPageUrl">Migration page URL or path</label>
+            <input
+              id="migrationPageUrl"
+              name="migrationPageUrl"
+              type="text"
+              class="text-field"
+              placeholder="/new-page/ or https://migration.example.com/new-page/"
+              autocomplete="off"
+            >
+
+            <dl class="url-preview single-url-preview">
+              <dt>Resolved live page</dt>
+              <dd id="different-live-preview">—</dd>
+              <dt>Resolved migration page</dt>
+              <dd id="different-migration-preview">—</dd>
+            </dl>
+            <p class="hint">Each box is compared as a complete URL — enter a full link or a path (paths are expanded using your base URLs from Settings).</p>
           </div>
 
           <p id="upload-hint" class="hint hidden">Expected: a column with URL aliases like <code>/artificial-intelligence/</code>. Optional Page name column. <a href="/sample-spreadsheet.xlsx" download>Download sample spreadsheet</a></p>
@@ -1152,9 +1183,14 @@
     const sourceTabs = document.querySelectorAll(".source-tabs button");
     const sourceSinglePanel = document.getElementById("source-single");
     const sourceUploadPanel = document.getElementById("source-upload");
+    const sourceDifferentPanel = document.getElementById("source-different");
     const maxPagesWrap = document.getElementById("max-pages-wrap");
     const uploadHint = document.getElementById("upload-hint");
     const pageAliasInput = document.getElementById("pageAlias");
+    const livePageUrlInput = document.getElementById("livePageUrl");
+    const migrationPageUrlInput = document.getElementById("migrationPageUrl");
+    const differentLivePreviewEl = document.getElementById("different-live-preview");
+    const differentMigrationPreviewEl = document.getElementById("different-migration-preview");
     const spreadsheetFileInput = document.getElementById("spreadsheetFile");
     const selectedFileEl = document.getElementById("selected-file");
     const moduleGrid = document.getElementById("module-grid");
@@ -1506,7 +1542,14 @@
       return normalized.replace(/\/{2,}/g, "/") || "/";
     }
 
-    function updateSingleUrlPreviews() {
+    function resolvePageUrl(value, baseUrl) {
+      const trimmed = String(value || "").trim();
+      if (!trimmed) return "";
+      if (/^https?:\/\//i.test(trimmed)) return trimmed;
+      return joinBaseUrl(baseUrl, normalizePageAlias(trimmed));
+    }
+
+    function updateSamePathPreviews() {
       const alias = normalizePageAlias(pageAliasInput.value);
       const liveBase = liveBaseUrlInput.value.trim();
       const migrationBase = migrationBaseUrlInput.value.trim();
@@ -1514,11 +1557,21 @@
       singleMigrationPreviewEl.textContent = alias && migrationBase ? joinBaseUrl(migrationBase, alias) : "—";
     }
 
+    function updateDifferentUrlPreviews() {
+      const liveBase = liveBaseUrlInput.value.trim();
+      const migrationBase = migrationBaseUrlInput.value.trim();
+      const liveUrl = resolvePageUrl(livePageUrlInput.value, liveBase);
+      const migrationUrl = resolvePageUrl(migrationPageUrlInput.value, migrationBase);
+      differentLivePreviewEl.textContent = liveUrl || "—";
+      differentMigrationPreviewEl.textContent = migrationUrl || "—";
+    }
+
     function updateUrlPreviews() {
       const alias = normalizePageAlias(pageAliasInput.value) || "/artificial-intelligence/";
       livePreviewEl.textContent = joinBaseUrl(liveBaseUrlInput.value, alias);
       migrationPreviewEl.textContent = joinBaseUrl(migrationBaseUrlInput.value, alias);
-      updateSingleUrlPreviews();
+      updateSamePathPreviews();
+      updateDifferentUrlPreviews();
     }
 
     function assertRunSettings() {
@@ -1605,7 +1658,7 @@
         .map(
           (page) => `<tr>
             <td>${escapeHtml(page.pageName)}</td>
-            <td>${escapeHtml(page.path)}</td>
+            <td>${escapeHtml(page.pathLabel || page.path)}</td>
             <td><a href="${escapeHtml(page.liveUrl)}" target="_blank" rel="noopener">${escapeHtml(page.liveUrl)}</a></td>
             <td><a href="${escapeHtml(page.migrationUrl)}" target="_blank" rel="noopener">${escapeHtml(page.migrationUrl)}</a></td>
           </tr>`
@@ -1642,6 +1695,7 @@
       });
       sourceSinglePanel.classList.toggle("hidden", source !== "single");
       sourceUploadPanel.classList.toggle("hidden", source !== "upload");
+      sourceDifferentPanel.classList.toggle("hidden", source !== "different");
       maxPagesWrap.classList.toggle("hidden", source !== "upload");
       uploadHint.classList.toggle("hidden", source !== "upload");
     }
@@ -1659,6 +1713,10 @@
     migrationBaseUrlInput.addEventListener("input", updateUrlPreviews);
     pageAliasInput.addEventListener("input", updateUrlPreviews);
     pageAliasInput.addEventListener("change", updateUrlPreviews);
+    livePageUrlInput.addEventListener("input", updateDifferentUrlPreviews);
+    livePageUrlInput.addEventListener("change", updateDifferentUrlPreviews);
+    migrationPageUrlInput.addEventListener("input", updateDifferentUrlPreviews);
+    migrationPageUrlInput.addEventListener("change", updateDifferentUrlPreviews);
 
     function appendSettingsFields(requestData) {
       requestData.set("liveBaseUrl", liveBaseUrlInput.value.trim());
@@ -1770,6 +1828,16 @@
         requestData.set("spreadsheet", file, file.name);
         const maxPages = document.getElementById("maxPages").value;
         if (maxPages) requestData.set("maxPages", String(maxPages));
+      } else if (activeSource === "different") {
+        const liveBase = liveBaseUrlInput.value.trim();
+        const migrationBase = migrationBaseUrlInput.value.trim();
+        const livePageUrl = resolvePageUrl(livePageUrlInput.value, liveBase);
+        const migrationPageUrl = resolvePageUrl(migrationPageUrlInput.value, migrationBase);
+        if (!livePageUrl || !migrationPageUrl) {
+          throw new Error("Enter both a live page URL/path and a migration page URL/path.");
+        }
+        requestData.set("livePageUrl", livePageUrl);
+        requestData.set("migrationPageUrl", migrationPageUrl);
       } else {
         const pageAlias = normalizePageAlias(pageAliasInput.value);
         if (!pageAlias) throw new Error("Enter a page path or alias.");
@@ -1999,13 +2067,14 @@
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Preview failed");
 
-        showMessage(
-          formMessage,
+        const previewMessage =
           activeSource === "single"
             ? `Ready to compare 1 page (${data.samplePages?.[0]?.path || pageAliasInput.value.trim()}).`
-            : `Found ${data.pageCount} page(s) on first sheet "${data.sheetName}".`,
-          "success"
-        );
+            : activeSource === "different"
+              ? `Ready to compare live and migration pages (${data.samplePages?.[0]?.liveUrl || livePageUrlInput.value.trim()} ↔ ${data.samplePages?.[0]?.migrationUrl || migrationPageUrlInput.value.trim()}).`
+              : `Found ${data.pageCount} page(s) on first sheet "${data.sheetName}".`;
+
+        showMessage(formMessage, previewMessage, "success");
 
         if (data.samplePages?.length) {
           previewResults.innerHTML = renderPreviewSamples(data);

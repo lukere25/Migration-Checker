@@ -770,7 +770,7 @@ export function renderImagesBody(report: PageReport): string {
     ${renderIssuesTable(result?.issues ?? [], issueContext(report), "No image issues recorded.")}`;
 }
 
-function renderSpacingColorMark(row: {
+function renderSpacingGapTile(row: {
   scope: string;
   color: string;
   colorName: string;
@@ -782,22 +782,29 @@ function renderSpacingColorMark(row: {
 }): string {
   const scopeLabel = row.scope === "inside-section" ? "Inside section" : "Between sections";
   const insideClass = row.scope === "inside-section" ? "spacing-legend-swatch--inside" : "";
+  const statusClass = spacingRowStatusClass(row.status);
 
-  return `<span class="spacing-legend-tooltip-wrap">
-    <span
-      class="spacing-legend-swatch ${insideClass}"
-      style="border-color:${escapeReportHtml(row.color)};background:${escapeReportHtml(row.color)}22"
-      tabindex="0"
-      aria-label="${escapeReportHtml(`${row.colorName}: ${row.gapLabel}`)}"
-    ></span>
-    <span class="spacing-legend-tooltip">
-      <strong>${escapeReportHtml(row.colorName)}</strong>
-      <span>${escapeReportHtml(scopeLabel)}</span>
-      <span>${escapeReportHtml(row.gapLabel)}</span>
-      <span>Live ${escapeReportHtml(row.liveGapPx)} · Migration ${escapeReportHtml(row.migrationGapPx)}</span>
-      <span>Delta ${escapeReportHtml(row.deltaPx)} · ${escapeReportHtml(row.status)}</span>
+  return `<article class="spacing-gap-tile ${statusClass ? `spacing-gap-tile--${statusClass}` : ""}">
+    <span class="spacing-legend-tooltip-wrap spacing-gap-tile-mark">
+      <span
+        class="spacing-legend-swatch spacing-gap-tile-swatch ${insideClass}"
+        style="border-color:${escapeReportHtml(row.color)};background:${escapeReportHtml(row.color)}22"
+        tabindex="0"
+        aria-label="${escapeReportHtml(`${row.colorName}: ${row.gapLabel}`)}"
+      ></span>
+      <span class="spacing-legend-tooltip">
+        <strong>${escapeReportHtml(row.colorName)}</strong>
+        <span>${escapeReportHtml(scopeLabel)}</span>
+        <span>${escapeReportHtml(row.gapLabel)}</span>
+        <span>Live ${escapeReportHtml(row.liveGapPx)} · Migration ${escapeReportHtml(row.migrationGapPx)}</span>
+        <span>Delta ${escapeReportHtml(row.deltaPx)} · ${escapeReportHtml(row.status)}</span>
+      </span>
     </span>
-  </span>`;
+    <div class="spacing-gap-tile-values">
+      <span class="spacing-gap-tile-site">L ${escapeReportHtml(row.liveGapPx)}</span>
+      <span class="spacing-gap-tile-site">M ${escapeReportHtml(row.migrationGapPx)}</span>
+    </div>
+  </article>`;
 }
 
 export function renderModuleSpacingBody(report: PageReport): string {
@@ -837,27 +844,13 @@ export function renderModuleSpacingBody(report: PageReport): string {
   }
 
   const wrapperNote = details?.prod?.wrapperLabel
-    ? `<p class="panel-subtitle">Main wrapper: <strong>${escapeReportHtml(details.prod.wrapperLabel)}</strong> · Hover a color mark for gap path and details. Solid = between sections, dashed = inside section.</p>`
-    : `<p class="panel-subtitle">Hover a color mark for gap path and details. Solid = between sections, dashed = inside section.</p>`;
+    ? `<p class="panel-subtitle">Main wrapper: <strong>${escapeReportHtml(details.prod.wrapperLabel)}</strong> · Hover a tile for gap path and details. Solid = between sections, dashed = inside section.</p>`
+    : `<p class="panel-subtitle">Hover a tile for gap path and details. Solid = between sections, dashed = inside section.</p>`;
 
-  const gapTableRows = (details?.comparisonRows ?? [])
-    .map(
-      (row) => `<tr>
-        <td class="spacing-gap-mark-cell">${renderSpacingColorMark(row)}</td>
-        <td>${escapeReportHtml(row.gapLabel)}</td>
-        <td>${escapeReportHtml(row.liveGapPx)}</td>
-        <td>${escapeReportHtml(row.migrationGapPx)}</td>
-      </tr>`
-    )
-    .join("");
+  const gapTiles = (details?.comparisonRows ?? []).map((row) => renderSpacingGapTile(row)).join("");
 
-  const gapTable = gapTableRows
-    ? `<div class="issues-table-wrap spacing-gap-table-wrap">
-      <table class="issues-table is-compact spacing-gap-table">
-        <thead><tr><th>Mark</th><th>Gap path</th><th>Live</th><th>Migration</th></tr></thead>
-        <tbody>${gapTableRows}</tbody>
-      </table>
-    </div>`
+  const gapGrid = gapTiles
+    ? `<div class="spacing-gap-tiles" role="list" aria-label="Module spacing gap comparison">${gapTiles}</div>`
     : "";
 
   const heightRows = (details?.sectionHeightRows ?? [])
@@ -887,7 +880,7 @@ export function renderModuleSpacingBody(report: PageReport): string {
     : "";
 
   return `${wrapperNote}
-  ${gapTable}
+  ${gapGrid}
   <div class="screens-compare">
     <div class="screens-compare-scroll spacing-fullpage-scroll" tabindex="0" aria-label="Module spacing comparison (live and migration scroll together)">
       <div class="screens-compare-grid screens-compare-grid--two">

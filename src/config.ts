@@ -26,6 +26,8 @@ export const config = {
   generatePdf: process.env.GENERATE_PDF === "true",
   /** Set FAST_VISUAL=true for viewport screenshots instead of full-page scroll capture. */
   fastVisual: process.env.FAST_VISUAL === "true",
+  /** Close cookie banners and tooltips before page capture (default on). */
+  closeOverlaysBeforeCompare: process.env.CLOSE_OVERLAYS_BEFORE_COMPARE !== "false",
   /** Default Playwright project (desktop Chrome). Set PLAYWRIGHT_ALL_BROWSERS=true to run iPad + Safari too. */
   defaultPlaywrightProject: process.env.PLAYWRIGHT_PROJECT || "chromium-desktop"
 };

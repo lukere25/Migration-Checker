@@ -113,6 +113,9 @@ function parseRunFields(body: Record<string, unknown> | undefined) {
   const fields = body ?? {};
   const rawPageAlias = typeof fields.pageAlias === "string" ? fields.pageAlias.trim() : "";
   const pageAlias = rawPageAlias ? normalizePath(rawPageAlias) || rawPageAlias : "";
+  const livePageUrl = typeof fields.livePageUrl === "string" ? fields.livePageUrl.trim() : "";
+  const migrationPageUrl =
+    typeof fields.migrationPageUrl === "string" ? fields.migrationPageUrl.trim() : "";
 
   return {
     maxPages: parseOptionalNumber(fields.maxPages),
@@ -121,6 +124,8 @@ function parseRunFields(body: Record<string, unknown> | undefined) {
     migrationBaseUrl: typeof fields.migrationBaseUrl === "string" ? fields.migrationBaseUrl.trim() : "",
     migrationPassword: typeof fields.migrationPassword === "string" ? fields.migrationPassword : "",
     pageAlias,
+    livePageUrl,
+    migrationPageUrl,
     enabledModules: parseEnabledModulesField(body)
   };
 }
@@ -186,6 +191,9 @@ app.put("/api/settings", async (req, res) => {
     if (body.enabledModules !== undefined) {
       patch.enabledModules = parseEnabledModulesInput(body.enabledModules);
     }
+    if (body.closeOverlaysBeforeCompare !== undefined) {
+      patch.closeOverlaysBeforeCompare = Boolean(body.closeOverlaysBeforeCompare);
+    }
 
     const updatingMigration =
       patch.liveBaseUrl !== undefined ||
@@ -239,8 +247,12 @@ app.post("/api/preview", handleMulterUpload("spreadsheet"), async (req, res) => 
       return;
     }
 
-    if (fields.pageAlias) {
-      const preview = await previewSpreadsheet({ pageAlias: fields.pageAlias });
+    if (fields.pageAlias || (fields.livePageUrl && fields.migrationPageUrl)) {
+      const preview = await previewSpreadsheet({
+        pageAlias: fields.pageAlias,
+        livePageUrl: fields.livePageUrl,
+        migrationPageUrl: fields.migrationPageUrl
+      });
       res.json(preview);
       return;
     }
@@ -266,7 +278,7 @@ app.post("/api/runs", handleMulterUpload("spreadsheet"), async (req, res) => {
           uploadedFileName: req.file.originalname,
           ...fields
         })
-      : fields.pageAlias
+      : fields.pageAlias || (fields.livePageUrl && fields.migrationPageUrl)
         ? await startRun(fields)
         : null;
 

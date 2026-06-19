@@ -55,18 +55,52 @@ function resolveSiteUrl(baseUrl: string, override: string | undefined, path: str
   return buildUrl(baseUrl, path);
 }
 
-export function createPageMapping(row: RawPageRow): PageMapping | null {
-  const path = resolvePathAlias(row);
-  if (!path) return null;
+/** Resolve a path or full URL to the complete page URL used for comparison. */
+export function resolveCompletePageUrl(baseUrl: string, input: string | undefined): string {
+  const trimmed = input?.trim();
+  if (!trimmed) return "";
+  return resolveSiteUrl(baseUrl, trimmed, normalizePath(trimmed) || "/");
+}
 
-  const prodUrl = resolveSiteUrl(config.prodBaseUrl, row.prodUrl, path);
-  const devUrl = resolveSiteUrl(config.devBaseUrl, row.devUrl, path);
+function reportPathForDifferentUrls(prodUrl: string, devUrl: string): string {
+  const prodSlug = slugify(normalizePath(prodUrl).replace(/^\/+|\/+$/g, "") || "home");
+  const devSlug = slugify(normalizePath(devUrl).replace(/^\/+|\/+$/g, "") || "home");
+  return `/url-pair/${prodSlug}__vs__${devSlug}/`;
+}
+
+export function createPageMapping(row: RawPageRow): PageMapping | null {
+  const liveInput = row.prodUrl?.trim();
+  const migrationInput = row.devUrl?.trim();
+  const hasExplicitPair = Boolean(liveInput && migrationInput);
+
+  let prodUrl: string;
+  let devUrl: string;
+  let path: string;
+
+  if (hasExplicitPair) {
+    prodUrl = resolveCompletePageUrl(config.prodBaseUrl, liveInput);
+    devUrl = resolveCompletePageUrl(config.devBaseUrl, migrationInput);
+    if (!prodUrl || !devUrl) return null;
+
+    const prodPath = normalizePath(prodUrl);
+    const devPath = normalizePath(devUrl);
+    path = prodPath === devPath ? prodPath : reportPathForDifferentUrls(prodUrl, devUrl);
+  } else {
+    path = resolvePathAlias(row);
+    if (!path) return null;
+
+    prodUrl = resolveSiteUrl(config.prodBaseUrl, row.prodUrl, path);
+    devUrl = resolveSiteUrl(config.devBaseUrl, row.devUrl, path);
+  }
 
   const pageNameCandidate = row.pageName?.trim();
+  const defaultName = path.replace(/^\/|\/$/g, "") || "Home";
   const pageName =
     pageNameCandidate && !looksLikePathOrUrl(pageNameCandidate)
       ? pageNameCandidate
-      : path.replace(/^\/|\/$/g, "") || "Home";
+      : hasExplicitPair && normalizePath(prodUrl) !== normalizePath(devUrl)
+        ? `${normalizePath(prodUrl).replace(/^\/+|\/+$/g, "") || "home"} ↔ ${normalizePath(devUrl).replace(/^\/+|\/+$/g, "") || "home"}`
+        : defaultName;
 
   return {
     pageName,
@@ -103,6 +137,13 @@ export function aliasPathToReportSegments(aliasPath: string): string[] {
 /** Report directory for a page alias, e.g. `reports/.../pages/nl/foo`. */
 export function resolveReportPageDir(reportsDir: string, aliasPath: string): string {
   return path.join(reportsDir, "pages", ...aliasPathToReportSegments(aliasPath));
+}
+
+export function pathLabelForMapping(mapping: Pick<PageMapping, "path" | "prodUrl" | "devUrl">): string {
+  const prodPath = normalizePath(mapping.prodUrl);
+  const devPath = normalizePath(mapping.devUrl);
+  if (prodPath === devPath) return mapping.path;
+  return `${prodPath} ↔ ${devPath}`;
 }
 
 export function liveUrlFromAlias(alias: string): string {

@@ -220,13 +220,66 @@ const pageReportCss = `
   }
   .spacing-gap-legend {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(8, minmax(0, 1fr));
     gap: 10px;
     margin: 0 0 16px;
     padding: 12px 14px;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--bg-elevated);
+  }
+  .spacing-gap-tiles {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0 0 16px;
+  }
+  .spacing-gap-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 10px 6px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-elevated);
+    text-align: center;
+  }
+  .spacing-gap-tile--pass {
+    border-color: rgba(34, 197, 94, 0.35);
+  }
+  .spacing-gap-tile--warning {
+    border-color: rgba(245, 158, 11, 0.45);
+  }
+  .spacing-gap-tile--fail {
+    border-color: rgba(239, 68, 68, 0.45);
+  }
+  .spacing-gap-tile-mark {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .spacing-gap-tile-swatch {
+    width: 28px;
+    height: 28px;
+  }
+  .spacing-gap-tile-values {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    min-width: 0;
+  }
+  .spacing-gap-tile-site {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.3;
   }
   .spacing-gap-table-wrap {
     margin: 0 0 16px;
@@ -311,10 +364,16 @@ const pageReportCss = `
   .spacing-legend-tooltip-wrap:focus-within .spacing-legend-tooltip {
     display: block;
   }
+  @media (max-width: 1200px) {
+    .spacing-gap-tiles,
+    .spacing-gap-legend { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  }
   @media (max-width: 900px) {
-    .spacing-gap-legend { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .spacing-gap-tiles,
+    .spacing-gap-legend { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   }
   @media (max-width: 640px) {
+    .spacing-gap-tiles,
     .spacing-gap-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .spacing-gap-table th:nth-child(3),
     .spacing-gap-table td:nth-child(3),
