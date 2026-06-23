@@ -1216,7 +1216,10 @@
       { id: "content", label: "Content", description: "Body text similarity" },
       { id: "images", label: "Images", description: "Image sources and alt text" },
       { id: "moduleSpacing", label: "Module spacing", description: "Full-page screenshots with module and gap marks" },
-      { id: "visual", label: "Visual comparison", description: "Screenshots and pixel diff" }
+      { id: "visual", label: "Visual comparison", description: "Screenshots and pixel diff" },
+      { id: "navigation", label: "Navigation", description: "Header navigation links and hover/dropdown menus" },
+      { id: "footer", label: "Footer", description: "Footer links, social links, legal links, and copyright text" },
+      { id: "visualLanguages", label: "Visual – all languages", description: "Screenshot pixel diff for every hreflang language variant of the page" }
     ];
 
     const MODULE_ICONS = {
@@ -1250,6 +1253,12 @@
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 8h4V4H4zm6 12h4v-4h-4zm-6 0h4v-4H4zm0-6h4v-4H4zm6 0h4v-4h-4zm6 10h4v-4h-4zm0-6h4v-4h-4z"/></svg>',
       visual:
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5M12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5m0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6"/></svg>',
+      navigation:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>',
+      footer:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20 3H4v10c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V3zm0 15H4a2 2 0 0 0-2 2v1h20v-1a2 2 0 0 0-2-2z"/></svg>',
+      visualLanguages:
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5.03 3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7 1.62-4.33L19.12 17z"/></svg>',
       default:
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 8h4V4H4zm6 12h4v-4h-4zm-6 0h4v-4H4zm0-6h4v-4H4zm6 0h4v-4h-4zm6 10h4v-4h-4zm0-6h4v-4h-4z"/></svg>'
     };

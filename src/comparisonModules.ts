@@ -19,7 +19,10 @@ export const COMPARISON_MODULES: ComparisonModule[] = [
   { id: "content", label: "Content", description: "Body text similarity" },
   { id: "images", label: "Images", description: "Image sources and alt text" },
   { id: "moduleSpacing", label: "Module spacing", description: "Full-page screenshots with module and gap marks" },
-  { id: "visual", label: "Visual comparison", description: "Screenshots and pixel diff" }
+  { id: "visual", label: "Visual comparison", description: "Screenshots and pixel diff" },
+  { id: "navigation", label: "Navigation", description: "Header navigation links and hover/dropdown menus" },
+  { id: "footer", label: "Footer", description: "Footer links, social links, legal links, and copyright text" },
+  { id: "visualLanguages", label: "Visual – all languages", description: "Screenshot pixel diff for every hreflang language variant of the page" }
 ];
 
 export const DEFAULT_ENABLED_MODULE_IDS = COMPARISON_MODULES.map((module) => module.id);

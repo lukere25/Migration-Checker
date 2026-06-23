@@ -302,6 +302,87 @@ export const pageReportDashboardCss = `
     padding: 18px 20px 22px;
   }
 
+  /* ── Sub-accordion (locale entries inside a parent accordion) ── */
+  .sub-accordion {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+
+  .sub-accordion:last-child {
+    margin-bottom: 0;
+  }
+
+  .sub-accordion-summary {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 16px;
+    cursor: pointer;
+    user-select: none;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid transparent;
+  }
+
+  .sub-accordion[open] .sub-accordion-summary {
+    border-bottom-color: var(--border);
+  }
+
+  .sub-accordion-summary::-webkit-details-marker { display: none; }
+
+  .sub-accordion-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .sub-accordion-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .sub-accordion-subtitle {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .sub-accordion-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .sub-accordion-chevron {
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--muted);
+    border-bottom: 2px solid var(--muted);
+    transform: rotate(45deg);
+    transition: transform 0.2s ease;
+    margin-top: -3px;
+  }
+
+  .sub-accordion[open] .sub-accordion-chevron {
+    transform: rotate(225deg);
+    margin-top: 3px;
+  }
+
+  .sub-accordion-body {
+    padding: 14px 16px 16px;
+  }
+
+  .sub-accordion-body .screens-compare {
+    margin: 0;
+  }
+
   .panel-subtitle {
     margin: 0 0 14px;
     color: var(--muted);

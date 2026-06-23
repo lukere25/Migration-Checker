@@ -25,7 +25,8 @@ import { compareHTagHierarchy } from "../src/comparators/hTagHierarchyComparator
 import { compareImages } from "../src/comparators/imageComparator";
 import { checkBrokenLinks } from "../src/comparators/linkComparator";
 import { compareMetadata } from "../src/comparators/metadataComparator";
-import { compareLanguage } from "../src/comparators/navigationComparator";
+import { compareFooter, compareLanguage, compareNavigation } from "../src/comparators/navigationComparator";
+import { captureAndCompareLocaleScreenshots } from "../src/comparators/visualLanguagesComparator";
 import { comparePageSpeed } from "../src/comparators/pageSpeedComparator";
 import { compareEmbeds } from "../src/comparators/embedComparator";
 import {
@@ -48,6 +49,8 @@ import { extractTechStack, emptyTechStackData } from "../src/extractors/techStac
 import { extractSchema, emptySchemaData } from "../src/extractors/schemaExtractor";
 import { ModuleSpacingData } from "../src/extractors/spacingExtractor";
 import { extractTextStyles } from "../src/extractors/textStyleExtractor";
+import { extractNavigation, NavigationData } from "../src/extractors/navigationExtractor";
+import { extractFooter, FooterData } from "../src/extractors/footerExtractor";
 import { readPageMappingsFromFile, resolveSpreadsheetPath } from "../src/readExcel";
 import { resolveReportPageDir } from "../src/urlMapper";
 import { writeSummaryCsv } from "../src/reporters/csvReporter";
@@ -81,6 +84,8 @@ interface ExtractedPage {
   schema: Awaited<ReturnType<typeof extractSchema>>;
   embeds: Awaited<ReturnType<typeof extractEmbeds>>;
   techStack: Awaited<ReturnType<typeof extractTechStack>>;
+  navigation: NavigationData;
+  footer: FooterData;
   capture: CaptureState;
 }
 
@@ -104,6 +109,9 @@ const emptyMetadata: Metadata = {
   hreflang: [],
   allMeta: []
 };
+
+const emptyNavigationData: NavigationData = { links: [], hoverMenus: [] };
+const emptyFooterData: FooterData = { text: "", links: [], socialLinks: [], legalLinks: [], copyrightText: "" };
 
 function emitRunProgress(phase: "started" | "completed" | "finishing", pageNum: number, pageTotal: number): void {
   const line = `[migration-progress] ${phase} ${pageNum}/${pageTotal}`;
@@ -291,8 +299,10 @@ async function loadAndExtract(page: Page, url: string, source: Source): Promise<
 
   const needHeadings = moduleEnabled("headings") || moduleEnabled("hTagHierarchy");
   const needTechStack = moduleEnabled("devTechnologies") || moduleEnabled("serverComparison");
+  // language hreflang is also needed by visualLanguages
+  const needLanguage = moduleEnabled("language") || moduleEnabled("visualLanguages");
 
-  const [metadata, headings, textStyles, content, images, links, language, schema, embeds, techStack] =
+  const [metadata, headings, textStyles, content, images, links, language, schema, embeds, techStack, navigation, footer] =
     await Promise.all([
     moduleEnabled("metadata") ? extractMetadata(page) : Promise.resolve(emptyMetadata),
     needHeadings ? extractHeadings(page) : Promise.resolve([]),
@@ -300,10 +310,12 @@ async function loadAndExtract(page: Page, url: string, source: Source): Promise<
     moduleEnabled("content") ? extractContent(page) : Promise.resolve({ text: "", length: 0 }),
     moduleEnabled("images") ? extractImages(page) : Promise.resolve([]),
     moduleEnabled("brokenLinks") ? extractLinks(page) : Promise.resolve([]),
-    moduleEnabled("language") ? extractLanguage(page) : Promise.resolve({ htmlLang: "", hreflang: [], placeholders: [] }),
+    needLanguage ? extractLanguage(page) : Promise.resolve({ htmlLang: "", hreflang: [], placeholders: [] }),
     moduleEnabled("schema") ? extractSchema(page) : Promise.resolve(emptySchemaData()),
     moduleEnabled("embeds") ? extractEmbeds(page) : Promise.resolve(emptyEmbedData()),
-    needTechStack ? extractTechStack(page, capture.documentHeaders) : Promise.resolve(emptyTechStackData())
+    needTechStack ? extractTechStack(page, capture.documentHeaders) : Promise.resolve(emptyTechStackData()),
+    moduleEnabled("navigation") ? extractNavigation(page) : Promise.resolve(emptyNavigationData),
+    moduleEnabled("footer") ? extractFooter(page) : Promise.resolve(emptyFooterData)
   ]);
 
   return {
@@ -318,6 +330,8 @@ async function loadAndExtract(page: Page, url: string, source: Source): Promise<
     schema,
     embeds,
     techStack,
+    navigation,
+    footer,
     capture
   };
 }
@@ -500,6 +514,22 @@ for (const [index, mapping] of pageMappings.entries()) {
           captureFullPageScreenshot(devPage, devScreenshot)
         ]);
         categories.visual = await compareScreenshots(prodScreenshot, devScreenshot, diffScreenshot);
+      }
+      if (moduleEnabled("navigation")) {
+        categories.navigation = compareNavigation(prodData.navigation, devData.navigation);
+      }
+      if (moduleEnabled("footer")) {
+        categories.footer = compareFooter(prodData.footer, devData.footer);
+      }
+      if (moduleEnabled("visualLanguages")) {
+        categories.visualLanguages = await captureAndCompareLocaleScreenshots(
+          prodData.language.hreflang,
+          config.prodBaseUrl,
+          config.devBaseUrl,
+          prodContext,
+          devContext,
+          pageDir
+        );
       }
 
       const allIssues = Object.values(categories).flatMap((category) => category.issues);

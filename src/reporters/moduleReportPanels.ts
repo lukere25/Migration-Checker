@@ -1,4 +1,7 @@
 import { Heading } from "../extractors/headingExtractor";
+import { NavigationData } from "../extractors/navigationExtractor";
+import { FooterData } from "../extractors/footerExtractor";
+import { LocaleVisualResult } from "../comparators/visualLanguagesComparator";
 import { CategoryResult, Issue } from "../utils/status";
 import { PageReport } from "./reportTypes";
 import { headingTreeCss, renderHeadingTree } from "./headingTreeView";
@@ -905,4 +908,182 @@ function spacingRowStatusClass(status: string): string {
   if (status === "MISSING_MIGRATION") return "fail";
   if (status === "MISSING_LIVE") return "warning";
   return "";
+}
+
+// ─── Navigation ──────────────────────────────────────────────────────────────
+
+export function renderNavigationBody(report: PageReport): string {
+  const result = report.categories.navigation;
+  const details = result?.details as { prod?: NavigationData; dev?: NavigationData } | undefined;
+
+  const prodLinks = details?.prod?.links ?? [];
+  const devLinks = details?.dev?.links ?? [];
+  const prodMenus = details?.prod?.hoverMenus ?? [];
+  const devMenus = details?.dev?.hoverMenus ?? [];
+
+  const allLinkHrefs = [...new Set([...prodLinks.map((l) => l.href), ...devLinks.map((l) => l.href)])];
+  const linkRows = allLinkHrefs.map((href) => {
+    const p = prodLinks.find((l) => l.href === href);
+    const d = devLinks.find((l) => l.href === href);
+    return `<tr>
+      <td>${escapeReportHtml(href)}</td>
+      <td>${escapeReportHtml(p?.text || "—")}</td>
+      <td>${escapeReportHtml(d?.text || "—")}</td>
+    </tr>`;
+  }).join("");
+
+  const linksTable = linkRows
+    ? `<h4 style="margin:12px 0 6px">Header links (${prodLinks.length} live · ${devLinks.length} migration)</h4>
+       <div class="issues-table-wrap"><table class="issues-table is-compact">
+         <thead><tr><th>URL</th><th>Live label</th><th>Migration label</th></tr></thead>
+         <tbody>${linkRows}</tbody>
+       </table></div>`
+    : `<p class="panel-subtitle">No header links captured.</p>`;
+
+  const menuRows = prodMenus.map((menu) => {
+    const devMenu = devMenus.find((m) => m.label === menu.label);
+    return `<tr>
+      <td>${escapeReportHtml(menu.label)}</td>
+      <td>${menu.opened ? "✓" : "—"}</td>
+      <td>${devMenu ? (devMenu.opened ? "✓" : "—") : "<em>missing</em>"}</td>
+      <td>${menu.links.length}</td>
+      <td>${devMenu?.links.length ?? "—"}</td>
+    </tr>`;
+  }).join("");
+
+  const menusTable = menuRows
+    ? `<h4 style="margin:12px 0 6px">Hover / dropdown menus</h4>
+       <div class="issues-table-wrap"><table class="issues-table is-compact">
+         <thead><tr><th>Menu</th><th>Live opens</th><th>Migration opens</th><th>Live links</th><th>Migration links</th></tr></thead>
+         <tbody>${menuRows}</tbody>
+       </table></div>`
+    : "";
+
+  return `${renderCategoryIntro(result, "Compares header navigation links and hover/dropdown menus.")}
+    ${linksTable}
+    ${menusTable}
+    ${renderIssuesTable(result?.issues ?? [], issueContext(report), "No navigation issues recorded.")}`;
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────────
+
+export function renderFooterBody(report: PageReport): string {
+  const result = report.categories.footer;
+  const details = result?.details as { prod?: FooterData; dev?: FooterData } | undefined;
+
+  const prod = details?.prod;
+  const dev = details?.dev;
+
+  const copyrightBlock = `<table>
+    <thead><tr><th>Site</th><th>Copyright text</th></tr></thead>
+    <tbody>
+      <tr><td>Live</td><td>${escapeReportHtml(prod?.copyrightText || "—")}</td></tr>
+      <tr><td>Migration</td><td>${escapeReportHtml(dev?.copyrightText || "—")}</td></tr>
+    </tbody>
+  </table>`;
+
+  function linkTable(title: string, prodLinks: FooterData["links"], devLinks: FooterData["links"]): string {
+    if (!prodLinks.length && !devLinks.length) return "";
+    const allHrefs = [...new Set([...prodLinks.map((l) => l.href), ...devLinks.map((l) => l.href)])];
+    const rows = allHrefs.map((href) => {
+      const p = prodLinks.find((l) => l.href === href);
+      const d = devLinks.find((l) => l.href === href);
+      return `<tr>
+        <td>${escapeReportHtml(href)}</td>
+        <td>${escapeReportHtml(p?.text || "—")}</td>
+        <td>${escapeReportHtml(d?.text || "—")}</td>
+      </tr>`;
+    }).join("");
+    return `<h4 style="margin:12px 0 6px">${escapeReportHtml(title)} (${prodLinks.length} live · ${devLinks.length} migration)</h4>
+      <div class="issues-table-wrap"><table class="issues-table is-compact">
+        <thead><tr><th>URL</th><th>Live label</th><th>Migration label</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
+  }
+
+  return `${renderCategoryIntro(result, "Compares footer links, social links, legal links, and copyright text.")}
+    ${copyrightBlock}
+    ${linkTable("Footer links", prod?.links ?? [], dev?.links ?? [])}
+    ${linkTable("Social links", prod?.socialLinks ?? [], dev?.socialLinks ?? [])}
+    ${linkTable("Legal links", prod?.legalLinks ?? [], dev?.legalLinks ?? [])}
+    ${renderIssuesTable(result?.issues ?? [], issueContext(report), "No footer issues recorded.")}`;
+}
+
+// ─── Visual – all languages ───────────────────────────────────────────────────
+
+export function renderVisualLanguagesBody(report: PageReport): string {
+  const result = report.categories.visualLanguages;
+  const details = result?.details as { locales?: LocaleVisualResult[] } | undefined;
+  const locales = details?.locales ?? [];
+
+  if (!locales.length) {
+    return `<p class="panel-subtitle">No hreflang language variants were found on this page, or the module was not enabled.</p>`;
+  }
+
+  const overviewRows = locales.map((l) => `<tr>
+    <td>${escapeReportHtml(l.lang)}</td>
+    <td>${l.mismatchPercent.toFixed(2)}%</td>
+    <td><span class="pill ${statusClass(l.status)}">${escapeReportHtml(l.status)}</span></td>
+    <td><a href="${escapeReportHtml(l.prodUrl)}" target="_blank" rel="noopener">live</a></td>
+    <td><a href="${escapeReportHtml(l.devUrl)}" target="_blank" rel="noopener">migration</a></td>
+  </tr>`).join("");
+
+  const overviewTable = `<div class="issues-table-wrap" style="margin-bottom:24px">
+    <table class="issues-table is-compact">
+      <thead><tr><th>Language</th><th>Mismatch</th><th>Status</th><th>Live</th><th>Migration</th></tr></thead>
+      <tbody>${overviewRows}</tbody>
+    </table>
+  </div>`;
+
+  const localeBlocks = locales.map((locale) => {
+    const pill = `<span class="pill ${statusClass(locale.status)}">${escapeReportHtml(locale.status)}</span>`;
+
+    const screenshotBlock = locale.prodScreenshot && locale.devScreenshot
+      ? `<div class="screens-compare">
+          <div class="screens-compare-scroll" tabindex="0" aria-label="Screenshot comparison for ${escapeReportHtml(locale.lang)}">
+            <div class="screens-compare-grid">
+              <div class="screens-col">
+                <h3 class="screens-col-title">Live</h3>
+                <img src="${escapeReportHtml(locale.prodScreenshot)}" alt="Live – ${escapeReportHtml(locale.lang)}">
+              </div>
+              <div class="screens-col">
+                <h3 class="screens-col-title">Migration</h3>
+                <img src="${escapeReportHtml(locale.devScreenshot)}" alt="Migration – ${escapeReportHtml(locale.lang)}">
+              </div>
+              <div class="screens-col">
+                <h3 class="screens-col-title">Diff</h3>
+                <img src="${escapeReportHtml(locale.diffScreenshot)}" alt="Pixel diff heatmap – ${escapeReportHtml(locale.lang)}">
+              </div>
+            </div>
+          </div>
+        </div>`
+      : `<p class="panel-subtitle">Screenshots could not be captured for this locale.</p>`;
+
+    return `<details class="sub-accordion">
+      <summary class="sub-accordion-summary">
+        <span class="sub-accordion-heading">
+          <span class="sub-accordion-title">${escapeReportHtml(locale.lang)}</span>
+          ${pill}
+          <span class="sub-accordion-subtitle">${locale.mismatchPercent.toFixed(2)}% mismatch</span>
+          <a href="${escapeReportHtml(locale.prodUrl)}" target="_blank" rel="noopener" style="font-size:12px">live ↗</a>
+          <a href="${escapeReportHtml(locale.devUrl)}" target="_blank" rel="noopener" style="font-size:12px">migration ↗</a>
+        </span>
+        <span class="sub-accordion-meta">
+          <span class="sub-accordion-chevron" aria-hidden="true"></span>
+        </span>
+      </summary>
+      <div class="sub-accordion-body">
+        ${screenshotBlock}
+      </div>
+    </details>`;
+  }).join("");
+
+  const issuesBlock = (result?.issues ?? []).length
+    ? renderIssuesTable(result?.issues ?? [], issueContext(report))
+    : "";
+
+  return `<p class="panel-subtitle">${escapeReportHtml(result?.summary ?? `${locales.length} language variant(s) compared`)}</p>
+    ${overviewTable}
+    ${localeBlocks}
+    ${issuesBlock}`;
 }

@@ -11,15 +11,18 @@ import {
   renderContentBody,
   renderDevTechnologiesBody,
   renderEmbedsBody,
+  renderFooterBody,
   renderHeadingsBody,
   renderHTagHierarchyBody,
   renderImagesBody,
   renderLanguageBody,
   renderModuleSpacingBody,
+  renderNavigationBody,
   renderPageSpeedBody,
   renderSchemaBody,
   renderServerComparisonBody,
-  renderTextStyleBody
+  renderTextStyleBody,
+  renderVisualLanguagesBody
 } from "./moduleReportPanels";
 import { moduleScoreCardsCss, renderModuleScoreCards, renderSummaryModuleScoreCards, getReportEnabledModuleIds, getSummaryEnabledModuleIds, getModulePageAnchor } from "./moduleScoreCards";
 import {
@@ -899,6 +902,42 @@ function renderPageAccordions(report: PageReport): string {
             status,
             open: true,
             body: renderVisualComparisonBody(report)
+          })
+        );
+        break;
+      case "navigation":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Navigation",
+            subtitle: "Header links and hover/dropdown menus",
+            status,
+            open: false,
+            body: renderNavigationBody(report)
+          })
+        );
+        break;
+      case "footer":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Footer",
+            subtitle: "Footer links, social links, legal links, and copyright",
+            status,
+            open: false,
+            body: renderFooterBody(report)
+          })
+        );
+        break;
+      case "visualLanguages":
+        parts.push(
+          renderAccordion({
+            id: anchor,
+            title: "Visual – all languages",
+            subtitle: "Screenshot pixel diff for every hreflang language variant",
+            status,
+            open: false,
+            body: renderVisualLanguagesBody(report)
           })
         );
         break;
