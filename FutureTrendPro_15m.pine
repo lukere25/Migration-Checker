@@ -1,0 +1,160 @@
+// ============================================================
+// FUTURE TREND PRO — 15 Min Optimized
+// Combines: Supertrend + EMA Cloud + MACD + ADX
+// Best used on: Futures / Index / Crypto — 15 min chart
+// ============================================================
+//@version=5
+indicator("Future Trend Pro [15m]", overlay=true, max_bars_back=500)
+
+// ─────────────────────────────────────────
+// INPUTS
+// ─────────────────────────────────────────
+
+// Supertrend
+st_atr_len   = input.int(10,   "Supertrend ATR Length",  group="Supertrend")
+st_factor    = input.float(3.0,"Supertrend Factor",      group="Supertrend", step=0.1)
+
+// EMA Cloud
+ema_fast     = input.int(21,  "Fast EMA",  group="EMA Cloud")
+ema_slow     = input.int(50,  "Slow EMA",  group="EMA Cloud")
+
+// MACD
+macd_fast    = input.int(12,  "MACD Fast",   group="MACD")
+macd_slow    = input.int(26,  "MACD Slow",   group="MACD")
+macd_signal  = input.int(9,   "MACD Signal", group="MACD")
+
+// ADX (trend strength filter)
+adx_len      = input.int(14,  "ADX Length",        group="ADX Filter")
+adx_thresh   = input.int(20,  "ADX Min Threshold", group="ADX Filter")
+use_adx      = input.bool(true,"Use ADX Filter",   group="ADX Filter")
+
+// Visuals
+show_bg      = input.bool(true, "Show Background Color", group="Visuals")
+show_signals = input.bool(true, "Show Buy/Sell Signals",  group="Visuals")
+
+// ─────────────────────────────────────────
+// SUPERTREND
+// ─────────────────────────────────────────
+[st_val, st_dir] = ta.supertrend(st_factor, st_atr_len)
+
+bull_trend = st_dir < 0   // -1 = uptrend
+bear_trend = st_dir > 0   // +1 = downtrend
+
+// Plot Supertrend line
+st_color = bull_trend ? color.new(#00E676, 0) : color.new(#FF1744, 0)
+plot(st_val, "Supertrend", color=st_color, linewidth=2)
+
+// ─────────────────────────────────────────
+// EMA CLOUD
+// ─────────────────────────────────────────
+ema21 = ta.ema(close, ema_fast)
+ema50 = ta.ema(close, ema_slow)
+
+ema21_plot = plot(ema21, "EMA 21", color=color.new(#29B6F6, 0), linewidth=1)
+ema50_plot = plot(ema50, "EMA 50", color=color.new(#FFA726, 0), linewidth=1)
+
+ema_bull = ema21 > ema50
+fill(ema21_plot, ema50_plot,
+     color = ema_bull ? color.new(#29B6F6, 88) : color.new(#FF7043, 88),
+     title="EMA Cloud")
+
+// ─────────────────────────────────────────
+// MACD
+// ─────────────────────────────────────────
+[macd_line, signal_line, hist] = ta.macd(close, macd_fast, macd_slow, macd_signal)
+macd_bull = macd_line > signal_line
+
+// ─────────────────────────────────────────
+// ADX (Trend Strength)
+// ─────────────────────────────────────────
+[di_plus, di_minus, adx_val] = ta.dmi(adx_len, adx_len)
+adx_strong = use_adx ? adx_val >= adx_thresh : true
+
+// ─────────────────────────────────────────
+// SIGNAL LOGIC
+// Fire ONCE when all 4 conditions first align
+// ─────────────────────────────────────────
+
+// Combined condition booleans
+all_bull = bull_trend and ema_bull and macd_bull and adx_strong
+all_bear = bear_trend and not ema_bull and not macd_bull and adx_strong
+
+// Fire only on the FIRST bar all conditions align (transition: false → true)
+long_signal  = all_bull and not all_bull[1]
+short_signal = all_bear and not all_bear[1]
+
+// ─────────────────────────────────────────
+// BACKGROUND COLORING
+// ─────────────────────────────────────────
+bg_color = all_bull ? color.new(#00E676, 94)
+         : all_bear ? color.new(#FF1744, 94)
+         : na
+
+bgcolor(show_bg ? bg_color : na, title="Trend Background")
+
+// ─────────────────────────────────────────
+// BUY / SELL SIGNALS ON CHART
+// ─────────────────────────────────────────
+
+// Arrow shapes
+plotshape(show_signals and long_signal,
+         title="BUY Arrow",
+         style=shape.triangleup,
+         location=location.belowbar,
+         color=color.new(#00E676, 0),
+         size=size.normal)
+
+plotshape(show_signals and short_signal,
+         title="SELL Arrow",
+         style=shape.triangledown,
+         location=location.abovebar,
+         color=color.new(#FF1744, 0),
+         size=size.normal)
+
+// Labels with price
+if show_signals and long_signal
+    label.new(bar_index, low - ta.atr(14),
+         text="✅ BUY\n" + str.tostring(close, "#.##"),
+         style=label.style_label_up,
+         color=color.new(#00E676, 10),
+         textcolor=color.black,
+         size=size.small)
+
+if show_signals and short_signal
+    label.new(bar_index, high + ta.atr(14),
+         text="🔴 SELL\n" + str.tostring(close, "#.##"),
+         style=label.style_label_down,
+         color=color.new(#FF1744, 10),
+         textcolor=color.white,
+         size=size.small)
+
+// ─────────────────────────────────────────
+// ALERTS
+// ─────────────────────────────────────────
+alertcondition(long_signal,  "FTP: BUY Signal",  "Future Trend Pro — BUY signal on {{ticker}} {{interval}}")
+alertcondition(short_signal, "FTP: SELL Signal", "Future Trend Pro — SELL signal on {{ticker}} {{interval}}")
+
+// ─────────────────────────────────────────
+// INFO TABLE (top-right corner)
+// ─────────────────────────────────────────
+var table info = table.new(position.top_right, 2, 5,
+     border_width=1, border_color=color.gray,
+     bgcolor=color.new(color.black, 75))
+
+if barstate.islast
+    bias = bull_trend and ema_bull ? "BULLISH" : bear_trend and not ema_bull ? "BEARISH" : "NEUTRAL"
+    bias_col = bias == "BULLISH" ? #00E676 : bias == "BEARISH" ? #FF1744 : color.gray
+
+    table.cell(info, 0, 0, "INDICATOR",  text_color=color.gray,  text_size=size.small)
+    table.cell(info, 1, 0, "STATUS",     text_color=color.gray,  text_size=size.small)
+    table.cell(info, 0, 1, "Trend Bias", text_color=color.white, text_size=size.small)
+    table.cell(info, 1, 1, bias,         text_color=bias_col,    text_size=size.small, bgcolor=color.new(bias_col, 85))
+    table.cell(info, 0, 2, "Supertrend", text_color=color.white, text_size=size.small)
+    table.cell(info, 1, 2, bull_trend ? "UP ▲" : "DOWN ▼",
+         text_color=bull_trend ? #00E676 : #FF1744, text_size=size.small)
+    table.cell(info, 0, 3, "MACD",       text_color=color.white, text_size=size.small)
+    table.cell(info, 1, 3, macd_bull ? "BULL" : "BEAR",
+         text_color=macd_bull ? #00E676 : #FF1744, text_size=size.small)
+    table.cell(info, 0, 4, "ADX",        text_color=color.white, text_size=size.small)
+    table.cell(info, 1, 4, str.tostring(math.round(adx_val, 1)),
+         text_color=adx_val >= adx_thresh ? #00E676 : color.gray, text_size=size.small)
